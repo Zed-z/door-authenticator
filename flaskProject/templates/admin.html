@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Logowanie do systemu iDoor</title>
+</head>
+<body>
+
+
+<h2> dodaj urzytkowniak</h2>
+
+<form action="/admin" method ="POST">
+
+    <input type= "text" name = "name" id ="name">
+    <input type="checkbox" name="is_admin" id="is_admin", value="true">
+    <input type="submit" value = "create_user">
+
+</form>
+
+{% for user in users %}
+    {{ user.name }} <br>
+    {{ user.id }} <br>
+    <a href="/delete/{{user.id}}">delete user</a> <br>
+{% endfor %}
+
+
+</body>
+</html>
