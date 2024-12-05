@@ -11,7 +11,7 @@ class users(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     is_admin = db.Column(db.String(1), nullable=False)
-
+	# TODO: może user_type
 
     def _repr_(self):
         return '<User %r>' % self.id % "  " % self.name
@@ -27,22 +27,23 @@ def hello_world():  # put application's code here
             user = users.query.filter(users.name == login).first()
 
             if user.is_admin == "A":
-                return redirect(url_for("admin"))
+                return redirect(url_for("admin", idenfidier=user.id))
             else:
                 return "nie ma jeszcze strony normalnego urzytkownika"
 
 
 
 
-        except:
+        except Exception as e:
+            print(e)
             return "<h1>Something went wrong</h1>"
 
 
     return render_template('index.html')
 
 
-@app.route('/admin', methods=['GET','POST'])
-def admin():
+@app.route('/admin/<int:identifier>', methods=['GET','POST'])
+def admin(identifier):
 
     if request.method == 'POST':
         try:
@@ -65,9 +66,9 @@ def admin():
 
         #except:
         #    return "<h1>Something went wrong with adding user</h1>"
-
+    admin = users.query.filter(users.id==identifier).one()
     us = users.query.order_by(users.name).all()
-    return render_template('admin.html',users = us)
+    return render_template('admin.html',users = us, admin=admin)
 
 @app.route("/delete/<int:idtifier>",methods=['POST','GET'])
 def delete(idtifier):
@@ -76,9 +77,10 @@ def delete(idtifier):
     try:
         users.query.filter(users.id == idtifier).filter(users.is_admin == "N" ).delete()
         db.session.commit()
-        return redirect(url_for("admin"))
-    except:
-        return "<h1>coudn't delete user<h1>"
+        return redirect(url_for("admin", identifier=user))
+    except Exception as e:
+            print(e)
+            return "<h1>Couldn't delete user</h1>"
 
 
 
@@ -91,6 +93,6 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
 
-    app.run()
+    app.run(host='0.0.0.0')
     db.session.add(users(name="admin", is_admin="T"))
     db.session.commit()
