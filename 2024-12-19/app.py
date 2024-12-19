@@ -1,7 +1,9 @@
 from flask import Flask,render_template,request,redirect,url_for,make_response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
+
 import random
+import time
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
@@ -24,8 +26,9 @@ class users(db.Model):
 class access_codes(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
-    code = db.Column(db.String(6), unique=True)
+    code = db.Column(db.String(6))
     bind_user = db.Column(db.String(1)) # Y/N
+    expires = db.Column(db.Integer) # Unix timestamp
 
     def _repr_(self):
         return '<Code %r>' % self.id % " " % self.user_id % " " % self.code % " " % self.bind_user
@@ -38,7 +41,11 @@ def generate_access_code(user, bind_user):
         if len(duplicates) == 0:
             break
 
-    db.session.add(access_codes(user_id = user.id, code = code, bind_user = bind_user))
+    expires = time.time() + 120
+
+    bind_user_bool = "Y" if bind_user else "N"
+
+    db.session.add(access_codes(user_id = user.id, code = code, bind_user = bind_user_bool, expires = expires))
     db.session.commit()
 
     return code
@@ -84,30 +91,15 @@ def admin():
     if request.method == 'POST':
 
         try:
-            #login = request.cookies.get('login')
-           # u = users.query.filter(users.name == login).first()
-            #print(u)
-            #if u.is_admin == "A":
-                username = request.form['name']
-                card_id = request.form['card_id']
-                if request.form.get('is_admin'):
-                    privilage = "A"
-                else:
-                    privilage = "N"
-                user = users(name=username, is_admin=privilage, imie_nazwisko="Jan Kowalski",card_id = card_id)
+            username = request.form['name']
+            fullname = request.form['fullname']
+            privilage = "A" if request.form.get('is_admin') else "N"
+            user = users(name=username, is_admin=privilage, imie_nazwisko=fullname)
 
-                db.session.add(user)
-                db.session.commit()
+            db.session.add(user)
+            db.session.commit()
         except:
-            return "nuh uh"
-
-
-
-
-
-
-        #except:
-        #    return "<h1>Something went wrong with adding user</h1>"
+            return "<h1>Something went wrong when adding user!</h1>"
 
     us = users.query.order_by(users.name).all()
     return render_template('admin.html',users = us)
@@ -118,7 +110,7 @@ def user():
     try:
         print(request.cookies.get('login'))
         user = users.query.filter(users.name == request.cookies.get('login')).first()
-        code = generate_access_code(user, False)
+        code = generate_access_code(user, user.card_id == None)
         assert(user != None)
     except:
         return "error"
@@ -129,17 +121,19 @@ def user():
 
 @app.route("/delete/<int:idtifier>",methods=['POST','GET'])
 def delete(idtifier):
-
-
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.is_admin == "A").first()
+        assert(u != None)
+    except:
+        return "nuh uh - tylko dla adminow"
 
     try:
-        #u =  users.querry.filter_by(login=request.cookies.get('login')).first()
-        #if u.is_admin == "A":
-            users.query.filter(users.id == idtifier).delete()
-            db.session.commit()
-            return redirect(url_for("admin"))
+        users.query.filter(users.id == idtifier).delete()
+        db.session.commit()
+        return redirect(url_for("admin"))
     except:
-        return "<h1>coudn't delete user<h1>"
+        return "<h1>Something went wrong when deleting user!</h1>"
 
 
 
@@ -155,24 +149,62 @@ def handle_card(card_id):
             return "there is no user in the database",400
     except:
         return "unkonwn error occured",400
-    
+
+@app.route("/card_bind/<string:card_id>",methods=['POST','GET'])
+def handle_card_bind(card_id):
+
+    try:
+        if request.cookies.get('bind_user') == None:# TODO COS NIE PRZESZLO TUTAJ
+
+            bind_user_id = int(request.cookies.get('bind_user'))
+            print("Binding user", bind_user_id, "to card", card_id)
+
+            user_q = users.query.filter(users.id == bind_user_id)
+            user = user_q.first()
+            if user is not None:
+
+                user_q.update({ "card_id": card_id })
+                resp = make_response(user.imie_nazwisko, 200)
+                resp.set_cookie("bind_user", "", expires=0)
+                return resp
+            else:
+                return "there is no user in the database",400        
+        else:
+            return "No user to bind!",400
+    except:
+        return "unkonwn error occured",400
 
 @app.route("/code/<string:code>",methods=['POST','GET'])
 def handle_code(code):
 
     try:
+        access_codes.query.filter(access_codes.expires < time.time()).delete()
+        db.session.commit()
+
         code_q = access_codes.query.filter(access_codes.code == code)
         code = code_q.first()
+        
+        if code == None:
+            return "there is no user in the database",400
+
         user = users.query.filter(users.id == code.user_id).first()
+
+        bind_user = code.bind_user
 
         code_q.delete()
         db.session.commit()
 
         if user is not None:
-            return user.imie_nazwisko, 200
+            resp = make_response(user.imie_nazwisko, 200)
+
+            if bind_user == "Y":
+                resp.set_cookie("bind_user", str(user.id), max_age=30)
+
+            return resp
         else:
             return "there is no user in the database",400
-    except:
+    except Exception as e:
+        print(e)
         return "unkonwn error occured",400
     
 

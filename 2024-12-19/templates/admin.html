@@ -17,6 +17,13 @@
             background-color: silver;
             border-radius: 1em;
         }
+
+        th, td {
+            border-bottom: 1px solid #ddd;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
     </style>
 </head>
 <body>
@@ -29,8 +36,8 @@
     <h2>Zarejestruj użytkownika:</h2>
     <form action="/admin" method ="POST">
 
-        <input type= "text" name="name" placeholder="nazwa użytkownika">
-        <input type= "text" name="card_id" placeholder="ID karty">
+        <input type= "text" name="name" placeholder="Nazwa Użytkownika">
+        <input type= "text" name="fullname" placeholder="Imię i Nazwisko">
         <label>
             <input type="checkbox" name="is_admin", value="true">
             Administrator

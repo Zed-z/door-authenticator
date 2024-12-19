@@ -13,6 +13,11 @@ import requests
 
 GPIO.setmode(GPIO.BCM)
 
+session = requests.Session()
+state = {
+	"bind_user": None # The id of the user to bind to the next scanned card, if not None
+}
+
 # ------------------------------------------------------------------------------
 
 spi_lock = threading.Lock()
@@ -40,18 +45,28 @@ def card_thread(bus_id, device_id, reset_pin, callback):
 def card_entry(id):
 	print("Wej", id)
 
-	s = requests.Session()
+	if state["bind_user"] != None:
 
-	def response(r, **kwargs):
-		print(r.status_code)
-		if r.status_code == 200:
-			LCD_queue_entry.put(("Witaj,", r.text))
+		response = session.get(f'http://localhost:5000/card_bind/{id}')
+		print(response.status_code)
+		if response.status_code == 200:
+			LCD_queue_entry.put(("Witaj,", response.text))
 			door_queue.put(None)
 		else:
 			LCD_queue_entry.put(("Zakaz wstepu!", "Zla karta!"))
 
-	s.hooks['response'].append(response)
-	s.get(f'http://localhost:5000/card/{id}')
+		state["bind_user"] = None
+		
+	else:
+
+		response = session.get(f'http://localhost:5000/card/{id}')
+		print(response.status_code)
+		if response.status_code == 200:
+			LCD_queue_entry.put(("Witaj,", response.text))
+			door_queue.put(None)
+		else:
+			LCD_queue_entry.put(("Zakaz wstepu!", "Zla karta!"))
+
 
 def card_exit(id):
 	print("Wyj", id)
@@ -142,18 +157,18 @@ def code_entry_update(code, lcd_queue):
 def code_entry_submit(code, lcd_queue):
 	print("!!! Wej:", code)
 
-	s = requests.Session()
-
-	def response(r, **kwargs):
-		print(r.status_code)
-		if r.status_code == 200:
-			LCD_queue_entry.put(("Witaj,", r.text))
-			door_queue.put(None)
+	response = session.get(f'http://localhost:5000/code/{code}')
+	print(response.status_code)
+	if response.status_code == 200:
+		print("Cookies:", session.cookies.get_dict())
+		state["bind_user"] = session.cookies.get_dict().get("bind_user", None)
+		if state["bind_user"] != None:
+			LCD_queue_entry.put(("Przyloz karte,", "aby przypisac."))
 		else:
-			LCD_queue_entry.put(("Zakaz wstepu!", "Zly kod!"))
-
-	s.hooks['response'].append(response)
-	s.get(f'http://localhost:5000/code/{code}')
+			LCD_queue_entry.put(("Witaj,", response.text))
+			door_queue.put(None)
+	else:
+		LCD_queue_entry.put(("Zakaz wstepu!", "Zly kod!"))
 
 def code_exit_update(code, lcd_queue):
 	lcd_queue.put(("* OK   # CANCEL", "> " + "*" * len(code)))
