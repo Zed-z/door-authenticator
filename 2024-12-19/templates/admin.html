@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Logowanie do systemu iDoor</title>
+
+    <style>
+        body {
+            background-color: white;
+        }
+        * {
+            font-family: sans-serif;
+        }
+        div {
+            margin: 1em;
+            padding: 1em;
+            background-color: silver;
+            border-radius: 1em;
+        }
+    </style>
+</head>
+<body>
+
+<div>
+    <h1>Witaj, a!</h1>
+</div>
+
+<div>
+    <h2>Zarejestruj użytkownika:</h2>
+    <form action="/admin" method ="POST">
+
+        <input type= "text" name="name" placeholder="nazwa użytkownika">
+        <input type= "text" name="card_id" placeholder="ID karty">
+        <label>
+            <input type="checkbox" name="is_admin", value="true">
+            Administrator
+        </label>
+        <input type="submit" value = "create_user", name="Zajerestruj">
+
+    </form>
+</div>
+
+<div>
+    <h2>Użytkownicy:</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Użytkownik</th>
+            <th>Imię i Nazwisko</th>
+            <th>Typ</th>
+            <th>ID Karty</th>
+            <th></th>
+        </tr>
+        {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.name }}</td>
+                <td>{{ user.imie_nazwisko }}</td>
+                <td>{{ user.is_admin }}</td>
+                <td>{{ user.card_id }}</td>
+                <td>
+                    {% if user.is_admin != 'A' %}
+                        <form action="/delete/{{user.id}}">
+                            <input type="submit" value="Usuń"/>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+
+</body>
+</html>
