@@ -154,7 +154,7 @@ def handle_card(card_id):
 def handle_card_bind(card_id):
 
     try:
-        if request.cookies.get('bind_user') == None:# TODO COS NIE PRZESZLO TUTAJ
+        if request.cookies.get('bind_user') != None:
 
             bind_user_id = int(request.cookies.get('bind_user'))
             print("Binding user", bind_user_id, "to card", card_id)
@@ -164,8 +164,11 @@ def handle_card_bind(card_id):
             if user is not None:
 
                 user_q.update({ "card_id": card_id })
+                db.session.commit()
+
                 resp = make_response(user.imie_nazwisko, 200)
                 resp.set_cookie("bind_user", "", expires=0)
+
                 return resp
             else:
                 return "there is no user in the database",400        

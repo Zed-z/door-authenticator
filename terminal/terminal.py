@@ -3,7 +3,7 @@
 # requests
 
 import RPi.GPIO as GPIO
-from aaaMFRC522 import *
+from SimplerMFRC522 import *
 import time
 import threading
 from LCD import LCD
@@ -25,7 +25,7 @@ spi_lock = threading.Lock()
 def card_thread(bus_id, device_id, reset_pin, callback):
 
 	spi_lock.acquire()
-	reader = SimpleMFRC522(bus=bus_id, device=device_id, pin_rst=reset_pin)
+	reader = SimplerMFRC522(bus=bus_id, device=device_id, pin_rst=reset_pin)
 	spi_lock.release()
 
 	id_prev = None
@@ -35,9 +35,11 @@ def card_thread(bus_id, device_id, reset_pin, callback):
 		spi_lock.acquire()
 
 		id = reader.read_id_no_block()
-		if id != None and id != id_prev:
-			callback(id)
-		id_prev = id
+
+		if id != id_prev:
+			if id is not None:
+				callback(id)
+			id_prev = id
 
 		spi_lock.release()
 
