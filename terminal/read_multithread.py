@@ -21,6 +21,7 @@ state = {
 # ------------------------------------------------------------------------------
 
 spi_lock = threading.Lock()
+
 def card_thread(bus_id, device_id, reset_pin, callback):
 
 	spi_lock.acquire()
@@ -30,7 +31,7 @@ def card_thread(bus_id, device_id, reset_pin, callback):
 	id_prev = None
 
 	while True:
-		
+
 		spi_lock.acquire()
 
 		id = reader.read_id_no_block()
@@ -77,6 +78,7 @@ def card_exit(id):
 i2c_lock = threading.Lock()
 LCD_queue_entry = queue.Queue()
 LCD_queue_exit = queue.Queue()
+
 def LCD_thread(i2c_addr, queue):
 
 	i2c_lock.acquire()
@@ -86,10 +88,12 @@ def LCD_thread(i2c_addr, queue):
 
 	while True:
 		(top, bottom) = queue.get()
+
 		if top != None:
 			i2c_lock.acquire()
 			lcd.message(top.ljust(16, " "), 1)
 			i2c_lock.release()
+
 		if bottom != None:
 			i2c_lock.acquire()
 			lcd.message(bottom.ljust(16, " "), 2)
@@ -180,6 +184,7 @@ def code_exit_submit(code, lcd_queue):
 # ------------------------------------------------------------------------------
 
 door_queue = queue.Queue()
+
 def door_thread():
 	buzzer_pin = 19
 	GPIO.setup(buzzer_pin, GPIO.OUT)
@@ -213,30 +218,30 @@ def buzz(p, t=0.5):
 # ------------------------------------------------------------------------------
 
 try:
-	reader_1_thread = threading.Thread(target=card_thread, group=None, args=[0, 0, 23, card_entry])
-	reader_1_thread.start()
+	thread_reader_entry = threading.Thread(target=card_thread, group=None, args=[0, 0, 23, card_entry])
+	thread_reader_entry.start()
 
-	reader_2_thread = threading.Thread(target=card_thread, group=None, args=[0, 1, 24, card_exit])
-	reader_2_thread.start()
+	thread_reader_exit = threading.Thread(target=card_thread, group=None, args=[0, 1, 24, card_exit])
+	thread_reader_exit.start()
 
-	t2 = threading.Thread(target=LCD_thread, group=None, args=[0x27, LCD_queue_entry])
-	t2.start()
+	thread_lcd_entry = threading.Thread(target=LCD_thread, group=None, args=[0x27, LCD_queue_entry])
+	thread_lcd_entry.start()
 
-	t3 = threading.Thread(target=door_thread, group=None)
-	t3.start()
+	thread_door = threading.Thread(target=door_thread, group=None)
+	thread_door.start()
 
-	t4 = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x20, LCD_queue_entry, code_entry_update, code_entry_submit])
-	t4.start()
+	thread_keyboard_entry = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x20, LCD_queue_entry, code_entry_update, code_entry_submit])
+	thread_keyboard_entry.start()
 
-	t5 = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x24, LCD_queue_exit, code_exit_update, code_exit_submit])
-	t5.start()
+	thread_keyboard_exit = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x24, LCD_queue_exit, code_exit_update, code_exit_submit])
+	thread_keyboard_exit.start()
 
-	reader_1_thread.join()
-	reader_2_thread.join()
-	t2.join()
-	t3.join()
-	t4.join()
-	t5.join()
+	thread_reader_entry.join()
+	thread_reader_exit.join()
+	thread_lcd_entry.join()
+	thread_door.join()
+	thread_keyboard_entry.join()
+	thread_keyboard_exit.join()
 
 finally:
 	GPIO.cleanup()
