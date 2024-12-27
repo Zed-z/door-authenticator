@@ -29,7 +29,7 @@
 <body>
 
 <div>
-    <h1>Witaj, a!</h1>
+    <h1>Witaj, {{ admin }}!</h1>
 </div>
 
 <div>
@@ -75,6 +75,19 @@
             </tr>
         {% endfor %}
     </table>
+</div>
+
+<div>
+    {% for log in logs %}
+        <tr>
+            <th>
+                {{ log }}
+            </th>
+        </tr>
+    {% endfor %}
+
+
+
 </div>
 
 </body>

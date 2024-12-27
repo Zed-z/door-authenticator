@@ -33,6 +33,33 @@ class access_codes(db.Model):
     def _repr_(self):
         return '<Code %r>' % self.id % " " % self.user_id % " " % self.code % " " % self.bind_user
 
+
+
+
+class logs(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    time_stamp = db.Column(db.Integer) #unix timestamp
+    message = db.Column(db.String(120))
+
+    def _repr_(self):
+        try:
+            return 'user' % self.user.id % 'has "' % self.message % '" at' % self.time_stamp
+        except:
+            return 'could not fetch log'
+
+    def __str__(self):
+        user = users.query.filter(users.id == self.user_id).first()
+        if user is None:
+            return "costam costam integralność srutututu"
+
+
+
+        return user.imie_nazwisko +" "+  self.message + " at " + str(self.time_stamp)
+
+
+
+
 def generate_access_code(user, bind_user):
 
     while True:
@@ -60,14 +87,22 @@ def root():
         try:
             user = users.query.filter(users.name == login).first()
 
+            log = logs(user_id=user.id,time_stamp=time.time(), message="logged in")
+
             if user.is_admin == "A":
                 resp = make_response(redirect(url_for("admin")))
                 resp.set_cookie('login', login)
+                db.session.add(log)
+                db.session.commit()
                 return resp
             elif user.is_admin == "N":
                 resp = make_response(redirect(url_for("user")))
                 resp.set_cookie('login', login)
+                db.session.add(log)
+                db.session.commit()
                 return resp
+
+
 
         except:
             resp = make_response("error")
@@ -102,7 +137,7 @@ def admin():
             return "<h1>Something went wrong when adding user!</h1>"
 
     us = users.query.order_by(users.name).all()
-    return render_template('admin.html',users = us)
+    return render_template('admin.html',users = us, admin = request.cookies.get('login'), logs = logs.query.all())
 
 
 @app.route('/user', methods=['GET','POST'])
@@ -131,6 +166,10 @@ def delete(idtifier):
     try:
         users.query.filter(users.id == idtifier).delete()
         db.session.commit()
+        log = logs(user_id=u.id, time_stamp=time.time(), message="deleted user" + str(idtifier))
+        db.session.add(log)
+        db.session.commit()
+
         return redirect(url_for("admin"))
     except:
         return "<h1>Something went wrong when deleting user!</h1>"
