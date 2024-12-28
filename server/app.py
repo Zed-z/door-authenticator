@@ -50,8 +50,7 @@ class logs(db.Model):
 
     def __str__(self):
         user = users.query.filter(users.id == self.user_id).first()
-        if user is None:
-            user = users(imie_nazwisko="deleted user")
+        if user is None: user = users(imie_nazwisko=f"deleted user ({self.user_id})")
 
         return user.imie_nazwisko +" "+  self.message + " at " + str( datetime.utcfromtimestamp(self.time_stamp))
 
@@ -62,6 +61,17 @@ class access_hours(db.Model):
     week_day = db.Column(db.Integer)
     start_hour = db.Column(db.Integer)
     end_hour = db.Column(db.Integer)
+
+    @property
+    def user_name(self):
+        user = users.query.filter(users.id == self.user_id).first()
+        if user is None: user = users(imie_nazwisko=f"deleted user ({self.user_id})")
+        return user.imie_nazwisko
+
+    @property
+    def week_day_name(self):
+        week_days = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
+        return week_days[self.week_day]
 
 
 def add_access_hour(user, week_day, start_hour, end_hour):
@@ -121,7 +131,46 @@ def root():
     return render_template('index.html')
 
 
+@app.route('/permsadd', methods=['POST'])
+def permsadd():
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.is_admin == "A").first()
+        assert(u != None)
+    except:
+        return "nuh uh - tylko dla adminow"
 
+    try:
+        ah = access_hours(user_id=request.form["user_id"], week_day=request.form["week_day"], start_hour=0, end_hour=0)
+        db.session.add(ah)
+        db.session.commit()
+        log = logs(user_id=u.id, time_stamp=time.time(), message="added permission " + str(ah.id))
+        db.session.add(log)
+        db.session.commit()
+    except:
+        return "<h1>Something went wrong when deleting permission!</h1>"
+
+    return redirect(url_for("admin"))
+
+@app.route('/permsdelete/<int:id>', methods=['POST', 'GET'])
+def permsdelete(id):
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.is_admin == "A").first()
+        assert(u != None)
+    except:
+        return "nuh uh - tylko dla adminow"
+
+    try:
+        access_hours.query.filter(access_hours.id == id).delete()
+        db.session.commit()
+        log = logs(user_id=u.id, time_stamp=time.time(), message="deleted permission " + str(id))
+        db.session.add(log)
+        db.session.commit()
+    except:
+        return "<h1>Something went wrong when deleting permission!</h1>"
+
+    return redirect(url_for("admin"))
 
 @app.route('/admin', methods=['GET','POST'])
 def admin():
@@ -155,7 +204,7 @@ def admin():
             return "<h1>Something went wrong when adding user!</h1>"
 
     us = users.query.order_by(users.name).all()
-    return render_template('admin.html',users = us, admin = request.cookies.get('login'), logs = logs.query.all())
+    return render_template('admin.html',users = us, admin = request.cookies.get('login'), logs = logs.query.all(), access_hours=access_hours.query.all())
 
 
 @app.route('/user', methods=['GET','POST'])

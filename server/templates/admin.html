@@ -2,29 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Logowanie do systemu iDoor</title>
-
-    <style>
-        body {
-            background-color: white;
-        }
-        * {
-            font-family: sans-serif;
-        }
-        div {
-            margin: 1em;
-            padding: 1em;
-            background-color: silver;
-            border-radius: 1em;
-        }
-
-        th, td {
-            border-bottom: 1px solid #ddd;
-        }
-        tr:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-    </style>
+    <title>Zarządzanie systemem drzwi</title>
+    <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body>
 
@@ -37,13 +16,15 @@
     <form action="/admin" method ="POST">
 
         <input type= "text" name="name" placeholder="Nazwa Użytkownika">
+        <br>
         <input type= "text" name="fullname" placeholder="Imię i Nazwisko">
+        <br>
         <label>
             <input type="checkbox" name="is_admin", value="true">
-            Administrator
+            Uprawnienia administratora
         </label>
-
-        <input type="submit" value = "create_user", name="Zajerestruj">
+        <br>
+        <input type="submit" value="Zajerestruj">
 
     </form>
 </div>
@@ -79,17 +60,67 @@
 </div>
 
 <div>
-<table>
-    {% for log in logs %}
+    <h2>Prawa dostępu:</h2>
+    <table>
         <tr>
-            <td>
-                {{ log }}
-            </td>
+            <th>Użytkownik</th>
+            <th>Dzień tygodnia</th>
+            <th>Godziny</th>
+            <th></th>
         </tr>
-    {% endfor %}
-</table>
+        {% for ah in access_hours %}
+            <tr>
+                <td>{{ ah.user_name }}</td>
+                <td>{{ ah.week_day_name }}</td>
+                <td>{{ ah.start_hour }} - {{ ah.end_hour }}</td>
+                <td>
+                    <form action="/permsdelete/{{ah.id}}">
+                        <input type="submit" value="Usuń"/>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
 
+    <h2>Dodaj prawa dostępu:</h2>
+    <form action="/permsadd" method ="POST">
+        Użytkownik:
+        <select name="user_id">
+            {% for user in users %}
+            <option value="{{ user.id }}">{{ user.imie_nazwisko }} ({{ user.name }})</option>
+            {% endfor %}
+        </select>
+        <br>
+        Dzień tygodnia:
+        <select name="week_day">
+            <option value="" selected disabled hidden>Wybierz...</option>
+            <option value="1">Poniedziałek</option>
+            <option value="2">Wtorek</option>
+            <option value="3">Środa</option>
+            <option value="4">Czwartek</option>
+            <option value="5">Piątek</option>
+            <option value="6">Sobota</option>
+            <option value="7">Niedziela</option>
+        </select>
+        <br>
+        Godziny dostępu:
+        <input type="time", name="timestart" required> - <input type="time", name="timeend" required>
+        <br>
+        <input type="submit" value="Dodaj"/>
+    </form>
+</div>
 
+<div>
+    <h2>Log aktywności:</h2>
+    <table>
+        {% for log in logs %}
+            <tr>
+                <td>
+                    {{ log }}
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
 </div>
 
 </body>
