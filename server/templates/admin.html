@@ -42,6 +42,7 @@
             <input type="checkbox" name="is_admin", value="true">
             Administrator
         </label>
+
         <input type="submit" value = "create_user", name="Zajerestruj">
 
     </form>
@@ -78,14 +79,15 @@
 </div>
 
 <div>
+<table>
     {% for log in logs %}
         <tr>
-            <th>
+            <td>
                 {{ log }}
-            </th>
+            </td>
         </tr>
     {% endfor %}
-
+</table>
 
 
 </div>

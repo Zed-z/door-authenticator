@@ -5,6 +5,8 @@ from sqlalchemy.orm import DeclarativeBase
 import random
 import time
 
+from datetime import datetime
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 
@@ -34,8 +36,6 @@ class access_codes(db.Model):
         return '<Code %r>' % self.id % " " % self.user_id % " " % self.code % " " % self.bind_user
 
 
-
-
 class logs(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
@@ -51,13 +51,23 @@ class logs(db.Model):
     def __str__(self):
         user = users.query.filter(users.id == self.user_id).first()
         if user is None:
-            return "costam costam integralność srutututu"
+            user = users(imie_nazwisko="deleted user")
+
+        return user.imie_nazwisko +" "+  self.message + " at " + str( datetime.utcfromtimestamp(self.time_stamp))
 
 
+class access_hours(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    week_day = db.Column(db.Integer)
+    start_hour = db.Column(db.Integer)
+    end_hour = db.Column(db.Integer)
 
-        return user.imie_nazwisko +" "+  self.message + " at " + str(self.time_stamp)
 
-
+def add_access_hour(user, week_day, start_hour, end_hour):
+    access_hour = access_hours(user_id = user.id, week_day = week_day, start_hour =start_hour, end_hour = end_hour)
+    access_hours.db.session.add(access_hour)
+    access_hours.db.session.commit()
 
 
 def generate_access_code(user, bind_user):
@@ -128,11 +138,19 @@ def admin():
         try:
             username = request.form['name']
             fullname = request.form['fullname']
+
+
             privilage = "A" if request.form.get('is_admin') else "N"
             user = users(name=username, is_admin=privilage, imie_nazwisko=fullname)
-
             db.session.add(user)
             db.session.commit()
+
+
+
+            log = logs(user_id=users.query.filter(users.name == request.cookies.get('login')).first().id, time_stamp=time.time(), message="added user " + user.imie_nazwisko)
+            db.session.add(log)
+            db.session.commit()
+
         except:
             return "<h1>Something went wrong when adding user!</h1>"
 
@@ -146,11 +164,15 @@ def user():
         print(request.cookies.get('login'))
         user = users.query.filter(users.name == request.cookies.get('login')).first()
         code = generate_access_code(user, user.card_id == None)
+
+
         assert(user != None)
     except:
         return "error"
 
-    
+    hours = access_hours.query.filter(access_hours.user_id == user.id).first()
+    if hours != None:
+        print(hours.start_hour, hours.end_hour)
     return render_template('user.html', user=user, code=code)
 
 
@@ -206,6 +228,10 @@ def handle_card_bind(card_id):
                 db.session.commit()
 
                 resp = make_response(user.imie_nazwisko, 200)
+                log = logs(user_id=user.id, time_stamp=time.time(), message="has been binded to card" + str(card_id))
+                db.session.add(log)
+                db.session.commit()
+
                 resp.set_cookie("bind_user", "", expires=0)
 
                 return resp
@@ -242,6 +268,9 @@ def handle_code(code):
             if bind_user == "Y":
                 resp.set_cookie("bind_user", str(user.id), max_age=30)
 
+            log = logs(user_id=user.id, time_stamp=time.time(), message="has used code" + str(code))
+            db.session.add(log)
+            db.session.commit()
             return resp
         else:
             return "there is no user in the database",400
