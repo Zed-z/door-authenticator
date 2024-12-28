@@ -2,31 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Logowanie do systemu iDoor</title>
-
-    <style>
-        body {
-            background-color: white;
-        }
-        * {
-            font-family: sans-serif;
-        }
-        div {
-            margin: 1em;
-            padding: 1em;
-            background-color: silver;
-            border-radius: 1em;
-        }
-    </style>
+    <title>Twoje konto w systemie drzwi</title>
+    <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
 <body>
 
 <div>
-    <h1>Witaj, {{ user.imie_nazwisko }}!</h1>
+    <h1>Witaj, <span class="username">{{ user.imie_nazwisko }}</span>!</h1>
 </div>
 
 <div>
-    <h1>Kod jednorazowy: {{ code }}!</h1>
+    <h1>Kod jednorazowy: <em>{{ code }}</em>!</h1>
 </div>
 
 </body>

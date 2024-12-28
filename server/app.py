@@ -50,24 +50,36 @@ class logs(db.Model):
 
     def __str__(self):
         user = users.query.filter(users.id == self.user_id).first()
-        if user is None:
-            user = users(imie_nazwisko="deleted user")
+        if user is None: user = users(imie_nazwisko=f"deleted user ({self.user_id})")
 
         return user.imie_nazwisko +" "+  self.message + " at " + str( datetime.utcfromtimestamp(self.time_stamp))
 
 
 class access_hours(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
-    week_day = db.Column(db.Integer)
-    start_hour = db.Column(db.Integer)
-    end_hour = db.Column(db.Integer)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    week_day = db.Column(db.Integer, nullable=False)
+    start_hour = db.Column(db.Time, nullable=False)
+    end_hour = db.Column(db.Time, nullable=False)
 
+    @property
+    def user_name(self):
+        user = users.query.filter(users.id == self.user_id).first()
+        if user is None: user = users(imie_nazwisko=f"deleted user ({self.user_id})")
+        return user.imie_nazwisko
 
-def add_access_hour(user, week_day, start_hour, end_hour):
-    access_hour = access_hours(user_id = user.id, week_day = week_day, start_hour =start_hour, end_hour = end_hour)
-    access_hours.db.session.add(access_hour)
-    access_hours.db.session.commit()
+    @property
+    def week_day_name(self):
+        week_days = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
+        return week_days[self.week_day]
+
+    @property
+    def start_hour_formatted(self):
+        return self.start_hour.strftime("%H:%M")
+
+    @property
+    def end_hour_formatted(self):
+        return self.end_hour.strftime("%H:%M")
 
 
 
@@ -123,7 +135,51 @@ def root():
     return render_template('index.html')
 
 
+@app.route('/permsadd', methods=['POST'])
+def permsadd():
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.is_admin == "A").first()
+        assert(u != None)
+    except:
+        return "Brak uprawnień administratora!"
 
+    try:
+        start_hour = datetime.strptime(request.form["start_hour"], '%H:%M').time()
+        end_hour = datetime.strptime(request.form["end_hour"], '%H:%M').time()
+        if start_hour >= end_hour:
+            return "Niewłaściwy przedział czasu!"
+
+        ah = access_hours(user_id=request.form["user_id"], week_day=request.form["week_day"], start_hour=start_hour, end_hour=end_hour)
+        db.session.add(ah)
+        db.session.commit()
+        log = logs(user_id=u.id, time_stamp=time.time(), message="added permission " + str(ah.id))
+        db.session.add(log)
+        db.session.commit()
+    except:
+        return "Błąd podczas dodawania praw dostępu!"
+
+    return redirect(url_for("admin"))
+
+@app.route('/permsdelete/<int:id>', methods=['POST', 'GET'])
+def permsdelete(id):
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.is_admin == "A").first()
+        assert(u != None)
+    except:
+        return "nuh uh - tylko dla adminow"
+
+    try:
+        access_hours.query.filter(access_hours.id == id).delete()
+        db.session.commit()
+        log = logs(user_id=u.id, time_stamp=time.time(), message="deleted permission " + str(id))
+        db.session.add(log)
+        db.session.commit()
+    except:
+        return "<h1>Something went wrong when deleting permission!</h1>"
+
+    return redirect(url_for("admin"))
 
 @app.route('/admin', methods=['GET','POST'])
 def admin():
@@ -157,7 +213,7 @@ def admin():
             return "<h1>Something went wrong when adding user!</h1>"
 
     us = users.query.order_by(users.name).all()
-    return render_template('admin.html',users = us, admin = request.cookies.get('login'), logs = logs.query.all())
+    return render_template('admin.html',users = us, admin = request.cookies.get('login'), logs = logs.query.all(), access_hours=access_hours.query.all())
 
 
 @app.route('/user', methods=['GET','POST'])
