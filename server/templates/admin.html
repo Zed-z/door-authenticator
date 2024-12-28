@@ -4,29 +4,12 @@
     <meta charset="UTF-8">
     <title>Zarządzanie systemem drzwi</title>
     <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 
 <div>
-    <h1>Witaj, {{ admin }}!</h1>
-</div>
-
-<div>
-    <h2>Zarejestruj użytkownika:</h2>
-    <form action="/admin" method ="POST">
-
-        <input type= "text" name="name" placeholder="Nazwa Użytkownika">
-        <br>
-        <input type= "text" name="fullname" placeholder="Imię i Nazwisko">
-        <br>
-        <label>
-            <input type="checkbox" name="is_admin", value="true">
-            Uprawnienia administratora
-        </label>
-        <br>
-        <input type="submit" value="Zajerestruj">
-
-    </form>
+    <h1>Witaj, <span class="username">{{ admin }}</span>!</h1>
 </div>
 
 <div>
@@ -49,14 +32,32 @@
                 <td>{{ user.card_id }}</td>
                 <td>
                     {% if user.is_admin != 'A' %}
-                        <form action="/delete/{{user.id}}">
-                            <input type="submit" value="Usuń"/>
-                        </form>
+                    <form action="/delete/{{user.id}}">
+                        <input type="submit" value="Usuń"/>
+                    </form>
+                    {% else %}
+                    <input type="button" value="Usuń" title="Nie można usunąć innych administratorów!" disabled/>
                     {% endif %}
                 </td>
             </tr>
         {% endfor %}
     </table>
+
+    <h3>Zarejestruj użytkownika:</h3>
+    <form action="/admin" method ="POST">
+
+        <input type= "text" name="name" placeholder="Nazwa Użytkownika">
+        <br>
+        <input type= "text" name="fullname" placeholder="Imię i Nazwisko">
+        <br>
+        <label>
+            <input type="checkbox" name="is_admin", value="true">
+            Uprawnienia administratora
+        </label>
+        <br>
+        <input type="submit" value="Zajerestruj">
+
+    </form>
 </div>
 
 <div>
@@ -72,7 +73,7 @@
             <tr>
                 <td>{{ ah.user_name }}</td>
                 <td>{{ ah.week_day_name }}</td>
-                <td>{{ ah.start_hour }} - {{ ah.end_hour }}</td>
+                <td>{{ ah.start_hour_formatted }} - {{ ah.end_hour_formatted }}</td>
                 <td>
                     <form action="/permsdelete/{{ah.id}}">
                         <input type="submit" value="Usuń"/>
@@ -82,7 +83,7 @@
         {% endfor %}
     </table>
 
-    <h2>Dodaj prawa dostępu:</h2>
+    <h3>Dodaj prawa dostępu:</h3>
     <form action="/permsadd" method ="POST">
         Użytkownik:
         <select name="user_id">
@@ -104,7 +105,7 @@
         </select>
         <br>
         Godziny dostępu:
-        <input type="time", name="timestart" required> - <input type="time", name="timeend" required>
+        <input type="time", name="start_hour" required> - <input type="time", name="end_hour" required>
         <br>
         <input type="submit" value="Dodaj"/>
     </form>
@@ -113,12 +114,15 @@
 <div>
     <h2>Log aktywności:</h2>
     <table>
+        <tr>
+            <th>Log</th>
+        </tr>
         {% for log in logs %}
-            <tr>
-                <td>
-                    {{ log }}
-                </td>
-            </tr>
+        <tr>
+            <td>
+                {{ log }}
+            </td>
+        </tr>
         {% endfor %}
     </table>
 </div>

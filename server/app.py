@@ -57,10 +57,10 @@ class logs(db.Model):
 
 class access_hours(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
-    week_day = db.Column(db.Integer)
-    start_hour = db.Column(db.Integer)
-    end_hour = db.Column(db.Integer)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    week_day = db.Column(db.Integer, nullable=False)
+    start_hour = db.Column(db.Time, nullable=False)
+    end_hour = db.Column(db.Time, nullable=False)
 
     @property
     def user_name(self):
@@ -73,11 +73,13 @@ class access_hours(db.Model):
         week_days = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
         return week_days[self.week_day]
 
+    @property
+    def start_hour_formatted(self):
+        return self.start_hour.strftime("%H:%M")
 
-def add_access_hour(user, week_day, start_hour, end_hour):
-    access_hour = access_hours(user_id = user.id, week_day = week_day, start_hour =start_hour, end_hour = end_hour)
-    access_hours.db.session.add(access_hour)
-    access_hours.db.session.commit()
+    @property
+    def end_hour_formatted(self):
+        return self.end_hour.strftime("%H:%M")
 
 
 def generate_access_code(user, bind_user):
@@ -138,17 +140,22 @@ def permsadd():
         u = users.query.filter(users.name == request.cookies.get('login')).filter(users.is_admin == "A").first()
         assert(u != None)
     except:
-        return "nuh uh - tylko dla adminow"
+        return "Brak uprawnień administratora!"
 
     try:
-        ah = access_hours(user_id=request.form["user_id"], week_day=request.form["week_day"], start_hour=0, end_hour=0)
+        start_hour = datetime.strptime(request.form["start_hour"], '%H:%M').time()
+        end_hour = datetime.strptime(request.form["end_hour"], '%H:%M').time()
+        if start_hour >= end_hour:
+            return "Niewłaściwy przedział czasu!"
+
+        ah = access_hours(user_id=request.form["user_id"], week_day=request.form["week_day"], start_hour=start_hour, end_hour=end_hour)
         db.session.add(ah)
         db.session.commit()
         log = logs(user_id=u.id, time_stamp=time.time(), message="added permission " + str(ah.id))
         db.session.add(log)
         db.session.commit()
     except:
-        return "<h1>Something went wrong when deleting permission!</h1>"
+        return "Błąd podczas dodawania praw dostępu!"
 
     return redirect(url_for("admin"))
 
