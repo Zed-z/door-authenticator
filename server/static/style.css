@@ -11,8 +11,36 @@ div {
 	border-radius: 1em;
 }
 
+.username {
+	color: #207cb9;
+}
+
+table { 
+    border-spacing: 0;
+    border-collapse: collapse;
+	border: 2px solid white;
+}
+
+input[type=button], input[type=submit], input[type=reset] {
+	border: none;
+	background-color: #207cb9;
+	color: white;
+	padding: 0.5em;
+	border-radius: 0.25em;
+}
+input:disabled {
+	opacity: 0.5;
+}
+
 th, td {
-	border-bottom: 1px solid #ddd;
+	padding: 0.75em;
+}
+th {
+	background-color: #207cb9;
+	color: white;
+}
+th:not(:first-child) {
+	border-left: 2px dotted white;
 }
 tr:nth-child(even) {
 	background-color: #f2f2f2;
