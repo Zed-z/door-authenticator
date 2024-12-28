@@ -70,6 +70,8 @@ def add_access_hour(user, week_day, start_hour, end_hour):
     access_hours.db.session.commit()
 
 
+
+
 def generate_access_code(user, bind_user):
 
     while True:
