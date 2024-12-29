@@ -8,6 +8,7 @@ import time
 import threading
 from LCD import LCD
 import queue
+from queue import Empty
 import spidev
 import requests
 
@@ -94,22 +95,32 @@ def LCD_thread(i2c_addr, queue):
 	i2c_lock.release()
 	queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 
+	inactivity_timeout = 5
+
 	while True:
-		(top, bottom) = queue.get()
+		try:
+			(top, bottom) = queue.get(block=True, timeout=inactivity_timeout)
 
-		if top != None:
-			i2c_lock.acquire()
-			lcd.message(top.ljust(16, " "), 1)
-			i2c_lock.release()
+			if top != None:
+				i2c_lock.acquire()
+				lcd.message(top.ljust(16, " "), 1)
+				i2c_lock.release()
 
-		if bottom != None:
+			if bottom != None:
+				i2c_lock.acquire()
+				lcd.message(bottom.ljust(16, " "), 2)
+				i2c_lock.release()
+
+		except Empty:
+			# Inactivity timeout
 			i2c_lock.acquire()
-			lcd.message(bottom.ljust(16, " "), 2)
+			lcd.message(config.lang["welcome_1"].ljust(16, " "), 1)
+			lcd.message(config.lang["welcome_2"].ljust(16, " "), 2)
 			i2c_lock.release()
 
 # ------------------------------------------------------------------------------
 
-def keyboard_thread(bus_id, i2c_addr, lcd_queue, update_callback, submit_callback):
+def keyboard_thread(bus_id, i2c_addr, lcd_queue, update_callback, cancel_callback, submit_callback):
 	from smbus import SMBus
 	bus = SMBus(bus_id)
 
@@ -141,7 +152,7 @@ def keyboard_thread(bus_id, i2c_addr, lcd_queue, update_callback, submit_callbac
 						key = KEY_MAP[number]
 						if key == "#":
 							buffer = ""
-							update_callback(buffer, lcd_queue)
+							cancel_callback(buffer, lcd_queue)
 						elif key == "*":
 							submit_callback(buffer, lcd_queue)
 							buffer = ""
@@ -189,6 +200,11 @@ def code_exit_update(code, lcd_queue):
 
 def code_exit_submit(code, lcd_queue):
 	print("Exit code submit:", code)
+
+def code_cancel(code, lcd_queue):
+	code_exit_update(code, lcd_queue)
+	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
+	print("Exit code cancel")
 
 # ------------------------------------------------------------------------------
 
@@ -241,10 +257,10 @@ try:
 	thread_door = threading.Thread(target=door_thread, group=None)
 	thread_door.start()
 
-	thread_keyboard_entry = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x20, LCD_queue_entry, code_entry_update, code_entry_submit])
+	thread_keyboard_entry = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x20, LCD_queue_entry, code_entry_update, code_cancel, code_entry_submit])
 	thread_keyboard_entry.start()
 
-	thread_keyboard_exit = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x24, LCD_queue_exit, code_exit_update, code_exit_submit])
+	thread_keyboard_exit = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x24, LCD_queue_exit, code_exit_update, code_cancel, code_exit_submit])
 	thread_keyboard_exit.start()
 
 	print("Ready!")
