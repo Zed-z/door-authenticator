@@ -35,6 +35,9 @@ class access_codes(db.Model):
     def _repr_(self):
         return '<Code %r>' % self.id % " " % self.user_id % " " % self.code % " " % self.bind_user
 
+    def __str__(self):
+        return '<Code %r>' % self.code
+
 
 class logs(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -273,6 +276,10 @@ def handle_card_bind(card_id):
     try:
         if request.cookies.get('bind_user') != None:
 
+            # Quit if card used
+            if users.query.filter(users.card_id == card_id).first() != None:
+                return "Card already in use!", 431
+
             bind_user_id = int(request.cookies.get('bind_user'))
             print("Binding user", bind_user_id, "to card", card_id)
 
@@ -292,7 +299,7 @@ def handle_card_bind(card_id):
 
                 return resp
             else:
-                return "there is no user in the database",400        
+                return "there is no user in the database", 400
         else:
             return "No user to bind!",400
     except:
@@ -338,11 +345,11 @@ def handle_code(code):
 @app.route('/createdb')
 def create_db():
     db.create_all()
-    db.session.add(users(name="admin", imie_nazwisko="Adam Miński", is_admin="A",card_id="2222"))
-    db.session.add(users(name="user1", imie_nazwisko="Biggus Dickus", is_admin="N",card_id="84928037837"))
-    db.session.add(users(name="user2", imie_nazwisko="Dr. Balls", is_admin="N",card_id="728048272166"))
+    db.session.add(users(name="admin", imie_nazwisko="Adam Minski", is_admin="A",card_id="713165701200"))
+    db.session.add(users(name="user1", imie_nazwisko="Jan Kod", is_admin="N",card_id="84928037837"))
+    db.session.add(users(name="user2", imie_nazwisko="Anna Karta", is_admin="N",card_id="728048272166"))
     db.session.commit()
-    return ""
+    return "<h1>Pomyślnie zainicjowano bazę danych!</h1>"
 
 
 

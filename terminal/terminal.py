@@ -59,8 +59,10 @@ def card_entry(id, lcd_queue):
 		if response.status_code == 200:
 			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
 			door_queue.put(None)
+		elif response.status_code == 431:
+			lcd_queue.put((config.lang["bind_fail_inuse_1"], config.lang["bind_fail_inuse_2"]))
 		else:
-			lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
+			lcd_queue.put((config.lang["bind_fail_generic_1"], config.lang["bind_fail_generic_2"]))
 
 		state["bind_user"] = None
 
@@ -75,7 +77,7 @@ def card_entry(id, lcd_queue):
 			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
 			door_queue.put(None)
 		else:
-			lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
+			lcd_queue.put((config.lang["card_wrong_1"], config.lang["card_wrong_2"]))
 
 
 def card_exit(id, lcd_queue):
