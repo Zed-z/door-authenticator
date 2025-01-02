@@ -21,16 +21,30 @@ table {
 	border: 2px solid white;
 }
 
+
+
 input[type=button], input[type=submit], input[type=reset] {
 	border: none;
 	background-color: #207cb9;
 	color: white;
 	padding: 0.5em;
-	border-radius: 0.25em;
+	border-radius: 0.5em;
+	margin: 0.25em;
 }
 input:disabled {
 	opacity: 0.5;
 }
+
+
+input[type=text], input[type=password], input[type=time], select {
+	background-color: white;
+	padding: 0.5em;
+	border: none;
+	border-radius: 0.5em;
+	margin: 0.25em;
+}
+
+
 
 th, td {
 	padding: 0.75em;
