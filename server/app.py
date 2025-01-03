@@ -346,9 +346,9 @@ def handle_code(code):
     
 
 
-@app.route("/logout", methods=["POST",'GET'])
+@app.route("/logout", methods=['POST','GET'])
 def logout():
-    resp = make_response(redirect("/"), 200)
+    resp = make_response(redirect("/"))
     resp.set_cookie("login", '',expires=0)
     return resp
 
