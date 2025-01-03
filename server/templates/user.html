@@ -15,5 +15,47 @@
     <h1>Kod jednorazowy: <em>{{ code }}</em>!</h1>
 </div>
 
+
+<div>
+    <h2>Prawa dostępu:</h2>
+    <table>
+        <tr>
+            <th>Użytkownik</th>
+            <th>Dzień tygodnia</th>
+            <th>Godziny</th>
+            <th></th>
+        </tr>
+        {% for ah in access_hours %}
+            <tr>
+                <td>{{ ah.user_name }}</td>
+                <td>{{ ah.week_day_name }}</td>
+                <td>{{ ah.start_hour_formatted }} - {{ ah.end_hour_formatted }}</td>
+                <td>
+                    <form action="/permsdelete/{{ah.id}}">
+                        <input type="submit" value="Usuń"/>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+
+
+<div>
+    <h2>Log aktywności:</h2>
+    <table>
+        <tr>
+            <th>Log</th>
+        </tr>
+        {% for log in logs %}
+        <tr>
+            <td>
+                {{ log }}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
 </body>
 </html>

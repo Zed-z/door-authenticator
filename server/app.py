@@ -73,7 +73,7 @@ class access_hours(db.Model):
 
     @property
     def week_day_name(self):
-        week_days = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
+        week_days = ["","Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
         return week_days[self.week_day]
 
     @property
@@ -231,10 +231,11 @@ def user():
     except:
         return "error"
 
-    hours = access_hours.query.filter(access_hours.user_id == user.id).first()
-    if hours != None:
-        print(hours.start_hour, hours.end_hour)
-    return render_template('user.html', user=user, code=code)
+    user_logs = logs.query.filter(logs.user_id == user.id).all()
+
+    hours = access_hours.query.filter(access_hours.user_id == user.id).all()
+
+    return render_template('user.html', user=user, code=code, logs = user_logs, access_hours=hours)
 
 
 @app.route("/delete/<int:idtifier>",methods=['POST','GET'])
