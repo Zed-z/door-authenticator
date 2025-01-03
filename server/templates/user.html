@@ -20,21 +20,13 @@
     <h2>Prawa dostępu:</h2>
     <table>
         <tr>
-            <th>Użytkownik</th>
             <th>Dzień tygodnia</th>
             <th>Godziny</th>
-            <th></th>
         </tr>
         {% for ah in access_hours %}
             <tr>
-                <td>{{ ah.user_name }}</td>
                 <td>{{ ah.week_day_name }}</td>
                 <td>{{ ah.start_hour_formatted }} - {{ ah.end_hour_formatted }}</td>
-                <td>
-                    <form action="/permsdelete/{{ah.id}}">
-                        <input type="submit" value="Usuń"/>
-                    </form>
-                </td>
             </tr>
         {% endfor %}
     </table>
