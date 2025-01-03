@@ -348,8 +348,8 @@ def handle_code(code):
 
 @app.route("/logout", methods=['POST','GET'])
 def logout():
-    resp = make_response(redirect("/"))
-    resp.set_cookie("login", '',expires=0)
+    resp = redirect(url_for("root"))
+    resp.set_cookie("login", '', expires=0)
     return resp
 
 
@@ -362,7 +362,8 @@ def create_db():
     db.session.add(users(name="user1", imie_nazwisko="Jan Kod", is_admin="N",card_id="84928037837"))
     db.session.add(users(name="user2", imie_nazwisko="Anna Karta", is_admin="N",card_id="728048272166"))
     db.session.commit()
-    return "<h1>Pomyślnie zainicjowano bazę danych!</h1>"
+
+    return redirect(url_for("root"))
 
 
 
