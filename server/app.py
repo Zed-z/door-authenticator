@@ -345,6 +345,16 @@ def handle_code(code):
         return "unkonwn error occured",400
     
 
+
+@app.route("/logout", methods=["POST",'GET'])
+def logout():
+    resp = make_response(redirect("/"), 200)
+    resp.set_cookie("login", '',expires=0)
+    return resp
+
+
+
+
 @app.route('/createdb')
 def create_db():
     db.create_all()
