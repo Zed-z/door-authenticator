@@ -3,18 +3,12 @@
 # requests
 
 import RPi.GPIO as GPIO
-from SimplerMFRC522 import *
 import time
 import threading
 
-from LCD import LCD
-
 import queue
 from queue import Empty
-import spidev
 import requests
-
-import config
 
 GPIO.setmode(GPIO.BCM)
 
@@ -23,9 +17,51 @@ state = {
 	"bind_user": None # The id of the user to bind to the next scanned card, if not None
 }
 
+# ----- CONFIG -----------------------------------------------------------------
+
+class Config():
+	def __init__(self, lang):
+		self.server_ip = "http://localhost:5000"
+
+		self.lang_pl = {
+			"welcome_1":				"--System Drzwi--",
+			"welcome_2":				" KARTA  //  KOD ",
+
+			"code_controls":			"* OK    # ANULUJ",
+			"code_loading":				"Czekaj...",
+			"code_wrong_1":				"Zakaz wstepu!",
+			"code_wrong_2":				"Niepopr. kod!",
+
+			"card_loading":				"Czekaj...",
+			"card_wrong_1":				"Zakaz wstepu!",
+			"card_wrong_2":				"Niepopr. karta!",
+
+			"card_bind_1":				"Przyloz karte,",
+			"card_bind_2":				"aby przypisac...",
+
+			"auth_ok_1":				"Witaj, {name}!",
+			"auth_ok_2":				"Drzwi otwarte.",
+
+			"bind_fail_generic_1":		"Rej. nieudana!",
+			"bind_fail_generic_2":		"Sprob. ponownie!",
+
+			"bind_fail_inuse_1":		"Rej. nieudana!",
+			"bind_fail_inuse_2":		"Karta w uzyciu!",
+
+		}
+
+		if lang == "pl":
+			self.lang = self.lang_pl
+		else:
+			self.lang = self.lang_pl
+
+config = Config("pl")
+
 # ------------------------------------------------------------------------------
 
 spi_lock = threading.Lock()
+
+from SimplerMFRC522 import *
 
 def card_thread(bus_id, device_id, reset_pin, lcd_queue, callback):
 
@@ -91,6 +127,8 @@ def card_exit(id, lcd_queue):
 i2c_lock = threading.Lock()
 LCD_queue_entry = queue.Queue()
 LCD_queue_exit = queue.Queue()
+
+from LCD import LCD # https://github.com/sterlingbeason/LCD-1602-I2C/blob/master/LCD.py
 
 def LCD_thread(i2c_addr, queue):
 
@@ -278,6 +316,7 @@ def code_exit_cancel(code, lcd_queue):
 # ------------------------------------------------------------------------------
 
 door_queue = queue.Queue()
+buzzer_mute = True
 
 def door_thread():
 	buzzer_pin = 19
@@ -311,6 +350,10 @@ def door_thread():
 		GPIO.output(door_pin, GPIO.LOW)
 
 def buzz(buzzer_pwm, t=0.5):
+	if buzzer_mute:
+		time.sleep(t)
+		return
+
 	buzzer_pwm.start(0)
 	for dc in range(0, 101, 5):
 		buzzer_pwm.ChangeDutyCycle(dc)
