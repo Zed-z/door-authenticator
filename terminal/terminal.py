@@ -61,12 +61,13 @@ config = Config("pl")
 
 spi_lock = threading.Lock()
 
-from SimplerMFRC522 import *
+from mfrc522 import *
 
 def card_thread(bus_id, device_id, reset_pin, lcd_queue, callback):
 
 	spi_lock.acquire()
-	reader = SimplerMFRC522(bus=bus_id, device=device_id, pin_rst=reset_pin)
+	reader = SimpleMFRC522.__new__(SimpleMFRC522)
+	reader.READER = MFRC522(bus=bus_id, device=device_id, pin_rst=reset_pin)
 	spi_lock.release()
 
 	id_prev = None
