@@ -157,25 +157,30 @@ def OLED_thread(i2c_addr, queue):
 
 	inactivity_timeout = 5
 
-	while True:
-		try:
-			(top, bottom) = queue.get(block=True, timeout=inactivity_timeout)
+	try:
+		while True:
+			try:
+				(top, bottom) = queue.get(block=True, timeout=inactivity_timeout)
 
-			if top != None:
-				oled_top = top
+				if top != None:
+					oled_top = top
 
-			if bottom != None:
-				oled_bottom = bottom
+				if bottom != None:
+					oled_bottom = bottom
 
-			i2c_lock.acquire()
-			OLED_display_text(oled, oled_top, oled_bottom)
-			i2c_lock.release()
+				i2c_lock.acquire()
+				OLED_display_text(oled, oled_top, oled_bottom)
+				i2c_lock.release()
 
-		except Empty:
-			# Inactivity timeout
-			i2c_lock.acquire()
-			OLED_display_text(oled, config.lang["welcome_1"], config.lang["welcome_2"])
-			i2c_lock.release()
+			except Empty:
+				# Inactivity timeout
+				i2c_lock.acquire()
+				OLED_display_text(oled, config.lang["welcome_1"], config.lang["welcome_2"])
+				i2c_lock.release()
+	finally:
+		# Cleanup
+		oled.fill(0)
+		oled.show()
 
 # ------------------------------------------------------------------------------
 
@@ -253,6 +258,11 @@ def code_entry_submit(code, lcd_queue):
 	else:
 		lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
 
+def code_entry_cancel(code, lcd_queue):
+	code_entry_update(code, lcd_queue)
+	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
+	print("Entry code cancel")
+
 def code_exit_update(code, lcd_queue):
 	lcd_queue.put((config.lang["code_controls"], "> " + "*" * len(code)))
 	print("Exit code:", code)
@@ -260,7 +270,7 @@ def code_exit_update(code, lcd_queue):
 def code_exit_submit(code, lcd_queue):
 	print("Exit code submit:", code)
 
-def code_cancel(code, lcd_queue):
+def code_exit_cancel(code, lcd_queue):
 	code_exit_update(code, lcd_queue)
 	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 	print("Exit code cancel")
@@ -272,34 +282,40 @@ door_queue = queue.Queue()
 def door_thread():
 	buzzer_pin = 19
 	GPIO.setup(buzzer_pin, GPIO.OUT)
-	p = GPIO.PWM(buzzer_pin, 500)
+	buzzer_pwm = GPIO.PWM(buzzer_pin, 500)
 
-	door_pin = 4
+	door_pin = 21
 	GPIO.setup(door_pin, GPIO.OUT)
 
-	# Init sound
-	buzz(p, 0.1)
-
 	try:
+		# Init sound
+		buzz(buzzer_pwm, 0.1)
+
+		# Main loop
 		while True:
+
 			door_queue.get()
+
 			print("Door Opened!")
 			GPIO.output(door_pin, GPIO.HIGH)
-			buzz(p, 3)
+			buzz(buzzer_pwm, 3)
 			GPIO.output(door_pin, GPIO.LOW)
 			print("Door Closed!")
+
+			# Clear queue to avoid message pile-up
+			with door_queue.mutex:
+				door_queue.queue.clear()
+
 	finally:
-		p.stop()
+		buzzer_pwm.stop()
 		GPIO.output(door_pin, GPIO.LOW)
 
-def buzz(p, t=0.5):
-	try:
-		p.start(0)
-		for dc in range(0, 101, 5):
-			p.ChangeDutyCycle(dc)
-			time.sleep(t/20)
-	finally:
-		p.stop()
+def buzz(buzzer_pwm, t=0.5):
+	buzzer_pwm.start(0)
+	for dc in range(0, 101, 5):
+		buzzer_pwm.ChangeDutyCycle(dc)
+		time.sleep(t/20)
+	buzzer_pwm.stop()
 
 # ------------------------------------------------------------------------------
 
@@ -319,10 +335,10 @@ try:
 	thread_door = threading.Thread(target=door_thread, group=None)
 	thread_door.start()
 
-	thread_keyboard_entry = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x20, LCD_queue_entry, code_entry_update, code_cancel, code_entry_submit])
+	thread_keyboard_entry = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x20, LCD_queue_entry, code_entry_update, code_entry_cancel, code_entry_submit])
 	thread_keyboard_entry.start()
 
-	thread_keyboard_exit = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x24, LCD_queue_exit, code_exit_update, code_cancel, code_exit_submit])
+	thread_keyboard_exit = threading.Thread(target=keyboard_thread, group=None, args=[1, 0x24, LCD_queue_exit, code_exit_update, code_exit_cancel, code_exit_submit])
 	thread_keyboard_exit.start()
 
 	print("Ready!")
@@ -337,3 +353,4 @@ try:
 
 finally:
 	GPIO.cleanup()
+	exit(0)
