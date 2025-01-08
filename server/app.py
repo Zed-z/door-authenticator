@@ -85,6 +85,18 @@ class access_hours(db.Model):
         return self.end_hour.strftime("%H:%M")
 
 
+class config(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_limit = db.Column(db.Integer)
+    enforce_access_hours = db.Column(db.Integer)
+
+class user_presence(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    time_stamp = db.Column(db.Integer) #unix timestamp
+
+
+
 
 
 def generate_access_code(user, bind_user):
@@ -263,15 +275,36 @@ def delete(idtifier):
 
 @app.route("/card/<string:card_id>",methods=['POST','GET'])
 def handle_card(card_id):
+    type = request.args.get('type', "entry") # entry / exit
 
     try:
         user = users.query.filter(users.card_id == card_id).first()
-        if user is not None:
-            return user.imie_nazwisko, 200
-        else:
-            return "there is no user in the database",400
-    except:
-        return "unkonwn error occured",400
+        
+        if user is None:
+            return "No such user exists!", 400
+
+        if type == 'entry':
+
+            if user_presence.query.filter(user_presence.user_id != user.id).count() >= config.query.first().user_limit:
+                if user.is_admin == 'N':
+                    return "User limit reached!", 421
+                
+            db.session.add(user_presence(user_id=user.id, time_stamp=time.time()))
+            db.session.commit()
+
+        elif type == 'exit':
+
+            if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
+                if user.is_admin == 'N':
+                    return "User not in room!", 422
+                
+            user_presence.query.filter(user_presence.user_id == user.id).delete()
+            db.session.commit()
+        
+        return user.imie_nazwisko, 200
+    except Exception as e:
+        print(repr(e))
+        return "Unknown error occured!", 400
 
 @app.route("/card_bind/<string:card_id>",methods=['POST','GET'])
 def handle_card_bind(card_id):
@@ -310,6 +343,7 @@ def handle_card_bind(card_id):
 
 @app.route("/code/<string:code>",methods=['POST','GET'])
 def handle_code(code):
+    type = request.args.get('type', "entry") # entry / exit
 
     try:
         access_codes.query.filter(access_codes.expires < time.time()).delete()
@@ -317,9 +351,9 @@ def handle_code(code):
 
         code_q = access_codes.query.filter(access_codes.code == code)
         code = code_q.first()
-        
-        if code == None:
-            return "there is no user in the database",400
+
+        if code is None:
+            return "Invalid code!",400
 
         user = users.query.filter(users.id == code.user_id).first()
 
@@ -328,21 +362,41 @@ def handle_code(code):
         code_q.delete()
         db.session.commit()
 
-        if user is not None:
-            resp = make_response(user.imie_nazwisko, 200)
+        if user is None:
+            return "No such user exists!",400
 
-            if bind_user == "Y":
-                resp.set_cookie("bind_user", str(user.id), max_age=30)
+        if type == 'entry':
 
-            log = logs(user_id=user.id, time_stamp=time.time(), message="has used code" + str(code))
-            db.session.add(log)
+            if user_presence.query.filter(user_presence.user_id != user.id).count() >= config.query.first().user_limit:
+                if user.is_admin == 'N':
+                    return "User limit reached!", 421
+
+            db.session.add(user_presence(user_id=user.id, time_stamp=time.time()))
             db.session.commit()
-            return resp
-        else:
-            return "there is no user in the database",400
+
+        elif type == 'exit':
+
+            if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
+                if user.is_admin == 'N':
+                    return "User not in room!", 422
+
+            user_presence.query.filter(user_presence.user_id == user.id).delete()
+            db.session.commit()
+
+        resp = make_response(user.imie_nazwisko, 200)
+
+        # Start bind process
+        if bind_user == "Y":
+            resp.set_cookie("bind_user", str(user.id), max_age=30)
+
+        log = logs(user_id=user.id, time_stamp=time.time(), message="has used code" + str(code))
+        db.session.add(log)
+        db.session.commit()
+        return resp
+
     except Exception as e:
         print(e)
-        return "unkonwn error occured",400
+        return "Unknown error occured!",400
     
 
 
@@ -361,6 +415,7 @@ def create_db():
     db.session.add(users(name="admin", imie_nazwisko="Adam Minski", is_admin="A",card_id="713165701200"))
     db.session.add(users(name="user1", imie_nazwisko="Jan Kod", is_admin="N",card_id="84928037837"))
     db.session.add(users(name="user2", imie_nazwisko="Anna Karta", is_admin="N",card_id="728048272166"))
+    db.session.add(config(user_limit=2, enforce_access_hours=1))
     db.session.commit()
 
     return redirect(url_for("root"))
@@ -372,6 +427,9 @@ if __name__ == '__main__':
 
     with app.app_context():
         db.create_all()
+        db.session.commit()
+
+        user_presence.query.delete()
         db.session.commit()
 
     app.run(host='0.0.0.0')
