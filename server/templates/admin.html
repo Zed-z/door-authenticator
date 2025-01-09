@@ -9,10 +9,17 @@
 <body>
 
 <div>
-    <h1>Witaj, <span class="username">{{ admin }}</span>!</h1>
+    <h1>Witaj, <span class="username">{{ admin.imie_nazwisko }}</span>!</h1>
     <form action="/logout">
         <input type="submit" value="Wyloguj się"/>
     </form>
+</div>
+
+<div>
+    <h1>Kod jednorazowy: <em>{{ code }}</em>!</h1>
+    {% if bind_code is not none %}
+        <h1>Kod rejestracji karty: <em>{{ bind_code }}</em>!</h1>
+    {% endif %}
 </div>
 
 <div>

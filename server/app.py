@@ -5,12 +5,22 @@ from sqlalchemy.orm import DeclarativeBase
 import random
 import time
 
-from datetime import datetime
+from datetime import datetime, date
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 
 db = SQLAlchemy(app)
+
+
+
+errors = {
+    "unknown_error":        ("Unknown error occured!",  400),
+    "invalid_card":         ("Invalid card!",           420),
+    "user_limit_reached":   ("User limit reached!",     421),
+    "user_not_in_room":     ("User not in room!",       422),
+    "card_already_in_use":  ("Card already in use!",    431),
+}
 
 
 
@@ -199,10 +209,12 @@ def permsdelete(id):
 @app.route('/admin', methods=['GET','POST'])
 def admin():
     try:
-        print(request.cookies.get('login'))
         u = users.query.filter(users.name == request.cookies.get('login')).filter(users.is_admin == "A").first()
         assert(u != None)
-    except:
+        code = generate_access_code(u, u.card_id == None)
+        bind_code = generate_access_code(u, True) if u.card_id == None else None
+    except Exception as e:
+        print(repr(e))
         return "nuh uh - tylko dla adminow"
 
 
@@ -228,7 +240,7 @@ def admin():
             return "<h1>Something went wrong when adding user!</h1>"
 
     us = users.query.order_by(users.name).all()
-    return render_template('admin.html',users = us, admin = request.cookies.get('login'), logs = logs.query.all(), access_hours=access_hours.query.all())
+    return render_template('admin.html',users = us, code=code, bind_code=bind_code, admin=u, logs = logs.query.all(), access_hours=access_hours.query.all())
 
 
 @app.route('/user', methods=['GET','POST'])
@@ -236,18 +248,18 @@ def user():
     try:
         print(request.cookies.get('login'))
         user = users.query.filter(users.name == request.cookies.get('login')).first()
-        code = generate_access_code(user, user.card_id == None)
-
-
         assert(user != None)
-    except:
+        code = generate_access_code(user, False)
+        bind_code = generate_access_code(user, True) if user.card_id == None else None
+    except Exception as e:
+        print(repr(e))
         return "error"
 
     user_logs = logs.query.filter(logs.user_id == user.id).all()
 
     hours = access_hours.query.filter(access_hours.user_id == user.id).all()
 
-    return render_template('user.html', user=user, code=code, logs = user_logs, access_hours=hours)
+    return render_template('user.html', user=user, code=code, bind_code=bind_code, logs = user_logs, access_hours=hours)
 
 
 @app.route("/delete/<int:idtifier>",methods=['POST','GET'])
@@ -279,20 +291,37 @@ def handle_card(card_id):
 
     try:
         user = users.query.filter(users.card_id == card_id).first()
+        now = datetime.now()
         
         if user is None:
-            return "No such user exists!", 400
+            return errors["invalid_card"]
 
         if type == 'entry':
 
+            if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                if user.is_admin == 'N':
+                    log = logs(user_id=user.id, time_stamp=time.time(), message=" tried to enter outside hours")
+                    db.session.add(log)
+                    db.session.commit()
+                    return "Outside access hours!", 423
+                else:
+                    log = logs(user_id=user.id, time_stamp=time.time(), message=" entered outside hours")
+                    db.session.add(log)
+                    db.session.commit()
+
             if user_presence.query.filter(user_presence.user_id != user.id).count() >= config.query.first().user_limit:
                 if user.is_admin == 'N':
-                    return "User limit reached!", 421
+                    return errors["user_limit_reached"]
                 
             db.session.add(user_presence(user_id=user.id, time_stamp=time.time()))
             db.session.commit()
 
         elif type == 'exit':
+
+            if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                log = logs(user_id=user.id, time_stamp=time.time(), message=" exited outside hours")
+                db.session.add(log)
+                db.session.commit()
 
             if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
                 if user.is_admin == 'N':
@@ -304,7 +333,7 @@ def handle_card(card_id):
         return user.imie_nazwisko, 200
     except Exception as e:
         print(repr(e))
-        return "Unknown error occured!", 400
+        return errors["unknown_error"]
 
 @app.route("/card_bind/<string:card_id>",methods=['POST','GET'])
 def handle_card_bind(card_id):
@@ -314,7 +343,7 @@ def handle_card_bind(card_id):
 
             # Quit if card used
             if users.query.filter(users.card_id == card_id).first() != None:
-                return "Card already in use!", 431
+                return errors["card_already_in_use"]
 
             bind_user_id = int(request.cookies.get('bind_user'))
             print("Binding user", bind_user_id, "to card", card_id)
@@ -339,7 +368,7 @@ def handle_card_bind(card_id):
         else:
             return "No user to bind!",400
     except:
-        return "unkonwn error occured",400
+        return errors["unknown_error"]
 
 @app.route("/code/<string:code>",methods=['POST','GET'])
 def handle_code(code):
@@ -369,7 +398,7 @@ def handle_code(code):
 
             if user_presence.query.filter(user_presence.user_id != user.id).count() >= config.query.first().user_limit:
                 if user.is_admin == 'N':
-                    return "User limit reached!", 421
+                    return errors["user_limit_reached"]
 
             db.session.add(user_presence(user_id=user.id, time_stamp=time.time()))
             db.session.commit()
@@ -378,7 +407,7 @@ def handle_code(code):
 
             if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
                 if user.is_admin == 'N':
-                    return "User not in room!", 422
+                    return errors["user_not_in_room"]
 
             user_presence.query.filter(user_presence.user_id == user.id).delete()
             db.session.commit()
@@ -396,7 +425,7 @@ def handle_code(code):
 
     except Exception as e:
         print(e)
-        return "Unknown error occured!",400
+        return errors["unknown_error"]
     
 
 
@@ -412,12 +441,19 @@ def logout():
 @app.route('/createdb')
 def create_db():
     db.create_all()
-    db.session.add(users(name="admin", imie_nazwisko="Adam Minski", is_admin="A",card_id="713165701200"))
+    db.session.add(users(name="admin", imie_nazwisko="Adam Miński", is_admin="A",card_id="713165701200"))
     db.session.add(users(name="user1", imie_nazwisko="Jan Kod", is_admin="N",card_id="84928037837"))
     db.session.add(users(name="user2", imie_nazwisko="Anna Karta", is_admin="N",card_id="728048272166"))
-    db.session.add(config(user_limit=2, enforce_access_hours=1))
-    db.session.commit()
 
+    for i in range(1, 5+1):
+        db.session.add(access_hours(user_id=2, week_day=i, start_hour=datetime.strptime("9:00", '%H:%M').time(), end_hour=datetime.strptime("17:00", '%H:%M').time()))
+
+    for i in range(2, 5+1):
+        db.session.add(access_hours(user_id=3, week_day=i, start_hour=datetime.strptime("8:30", '%H:%M').time(), end_hour=datetime.strptime("12:00", '%H:%M').time()))
+
+    db.session.add(config(user_limit=2, enforce_access_hours=1))
+
+    db.session.commit()
     return redirect(url_for("root"))
 
 

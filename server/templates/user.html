@@ -16,8 +16,10 @@
 
 <div>
     <h1>Kod jednorazowy: <em>{{ code }}</em>!</h1>
+    {% if bind_code is not none %}
+        <h1>Kod rejestracji karty: <em>{{ bind_code }}</em>!</h1>
+    {% endif %}
 </div>
-
 
 <div>
     <h2>Prawa dostępu:</h2>
