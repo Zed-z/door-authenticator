@@ -5,10 +5,10 @@
 import RPi.GPIO as GPIO
 import time
 import threading
-
 import queue
 from queue import Empty
 import requests
+from unidecode import unidecode
 
 GPIO.setmode(GPIO.BCM)
 
@@ -22,6 +22,8 @@ state = {
 class Config():
 	def __init__(self, lang):
 		self.server_ip = "http://localhost:5000"
+		self.inactivity_timeout = 5
+		self.buzzer_mute = True
 
 		self.lang_pl = {
 			"welcome_1":				"--System Drzwi--",
@@ -35,6 +37,18 @@ class Config():
 			"card_loading":				"Czekaj...",
 			"card_wrong_1":				"Zakaz wstepu!",
 			"card_wrong_2":				"Niepopr. karta!",
+
+			"outside_hours_1":			"Zakaz wstepu!",
+			"outside_hours_2":			"Poza godzinami!",
+
+			"user_limit_1":				"Zakaz wstepu!",
+			"user_limit_2":				"Przeludnienie!",
+
+			"not_in_room_1":			"Zakaz wstepu!",
+			"not_in_room_2":			"Nie jest w sali!",
+
+			"unknown_error_1":			"Zakaz wstepu!",
+			"unknown_error_2":			"Nieznany blad!",
 
 			"card_bind_1":				"Przyloz karte,",
 			"card_bind_2":				"aby przypisac...",
@@ -87,6 +101,27 @@ def card_thread(bus_id, device_id, reset_pin, lcd_queue, callback):
 
 		time.sleep(0.5)
 
+def card_unlock(id, lcd_queue, type):
+	lcd_queue.put((config.lang["card_loading"], ""))
+
+	response = session.get(f'{config.server_ip}/card/{id}?type={type}')
+	print("Response:", response.status_code, response.text)
+
+	if response.status_code == 200:
+		lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
+		door_queue.put(None)
+	else:
+		if response.status_code == 423:
+			lcd_queue.put((config.lang["outside_hours_1"], config.lang["outside_hours_2"]))
+		elif response.status_code == 421:
+			lcd_queue.put((config.lang["user_limit_1"], config.lang["user_limit_2"]))
+		elif response.status_code == 422:
+			lcd_queue.put((config.lang["not_in_room_1"], config.lang["not_in_room_2"]))
+		elif response.status_code == 420:
+			lcd_queue.put((config.lang["card_wrong_1"], config.lang["card_wrong_2"]))
+		else:
+			lcd_queue.put((config.lang["unknown_error_1"], config.lang["unknown_error_2"]))
+
 def card_entry(id, lcd_queue):
 	print("Entry card:", id)
 
@@ -96,7 +131,7 @@ def card_entry(id, lcd_queue):
 		print("Response:", response.status_code, response.text)
 
 		if response.status_code == 200:
-			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
+			lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
 			door_queue.put(None)
 		elif response.status_code == 431:
 			lcd_queue.put((config.lang["bind_fail_inuse_1"], config.lang["bind_fail_inuse_2"]))
@@ -106,21 +141,12 @@ def card_entry(id, lcd_queue):
 		state["bind_user"] = None
 
 	else:
-
-		lcd_queue.put((config.lang["card_loading"], ""))
-
-		response = session.get(f'{config.server_ip}/card/{id}')
-		print("Response:", response.status_code, response.text)
-
-		if response.status_code == 200:
-			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
-			door_queue.put(None)
-		else:
-			lcd_queue.put((config.lang["card_wrong_1"], config.lang["card_wrong_2"]))
+		card_unlock(id, lcd_queue, "entry")
 
 
 def card_exit(id, lcd_queue):
-	print("Exit card:", id)
+
+	card_unlock(id, lcd_queue, "exit")
 
 
 # ------------------------------------------------------------------------------
@@ -138,11 +164,9 @@ def LCD_thread(i2c_addr, queue):
 	i2c_lock.release()
 	queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 
-	inactivity_timeout = 5
-
 	while True:
 		try:
-			(top, bottom) = queue.get(block=True, timeout=inactivity_timeout)
+			(top, bottom) = queue.get(block=True, timeout=config.inactivity_timeout)
 
 			if top != None:
 				i2c_lock.acquire()
@@ -194,12 +218,10 @@ def OLED_thread(i2c_addr, queue):
 	i2c_lock.release()
 	queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 
-	inactivity_timeout = 5
-
 	try:
 		while True:
 			try:
-				(top, bottom) = queue.get(block=True, timeout=inactivity_timeout)
+				(top, bottom) = queue.get(block=True, timeout=config.inactivity_timeout)
 
 				if top != None:
 					oled_top = top
@@ -283,7 +305,7 @@ def code_entry_submit(code, lcd_queue):
 
 	lcd_queue.put((config.lang["code_loading"], None))
 
-	response = session.get(f'{config.server_ip}/code/{code}')
+	response = session.get(f'{config.server_ip}/code/{code}?type=entry')
 	print("Response:", response.status_code, response.text)
 
 	if response.status_code == 200:
@@ -292,7 +314,7 @@ def code_entry_submit(code, lcd_queue):
 		if state["bind_user"] != None:
 			lcd_queue.put((config.lang["card_bind_1"], config.lang["card_bind_2"]))
 		else:
-			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
+			lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
 			door_queue.put(None)
 	else:
 		lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
@@ -317,7 +339,6 @@ def code_exit_cancel(code, lcd_queue):
 # ------------------------------------------------------------------------------
 
 door_queue = queue.Queue()
-buzzer_mute = True
 
 def door_thread():
 	buzzer_pin = 19
@@ -351,7 +372,7 @@ def door_thread():
 		GPIO.output(door_pin, GPIO.LOW)
 
 def buzz(buzzer_pwm, t=0.5):
-	if buzzer_mute:
+	if config.buzzer_mute:
 		time.sleep(t)
 		return
 
