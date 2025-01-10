@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-# MFRC522
-# requests
-
 import RPi.GPIO as GPIO
 import time
 import threading
@@ -11,11 +7,6 @@ import requests
 from unidecode import unidecode
 
 GPIO.setmode(GPIO.BCM)
-
-session = requests.Session()
-state = {
-	"bind_user": None # The id of the user to bind to the next scanned card, if not None
-}
 
 # ----- CONFIG -----------------------------------------------------------------
 
@@ -69,11 +60,21 @@ class Config():
 		else:
 			self.lang = self.lang_pl
 
+# ----- SHARED VARIABLES -------------------------------------------------------
+
+i2c_lock = threading.Lock()
+spi_lock = threading.Lock()
+LCD_queue_entry = queue.Queue()
+LCD_queue_exit = queue.Queue()
+door_queue = queue.Queue()
 config = Config("pl")
 
-# ------------------------------------------------------------------------------
+session = requests.Session()
+state = {
+	"bind_user": None # The id of the user to bind to the next scanned card, if not None
+}
 
-spi_lock = threading.Lock()
+# ----- CARD HANDLING ----------------------------------------------------------
 
 from mfrc522 import *
 
@@ -143,17 +144,10 @@ def card_entry(id, lcd_queue):
 	else:
 		card_unlock(id, lcd_queue, "entry")
 
-
 def card_exit(id, lcd_queue):
-
 	card_unlock(id, lcd_queue, "exit")
 
-
-# ------------------------------------------------------------------------------
-
-i2c_lock = threading.Lock()
-LCD_queue_entry = queue.Queue()
-LCD_queue_exit = queue.Queue()
+# ----- DISPLAY HANDLING -------------------------------------------------------
 
 from LCD import LCD # https://github.com/sterlingbeason/LCD-1602-I2C/blob/master/LCD.py
 
@@ -202,7 +196,6 @@ def OLED_display_text(oled, oled_top, oled_bottom):
 	oled.image(image)
 	oled.show()
 
-
 def OLED_thread(i2c_addr, queue):
 
 	i2c_lock.acquire()
@@ -243,10 +236,11 @@ def OLED_thread(i2c_addr, queue):
 		oled.fill(0)
 		oled.show()
 
-# ------------------------------------------------------------------------------
+# ----- CODE HANDLING ----------------------------------------------------------
+
+from smbus import SMBus
 
 def keyboard_thread(bus_id, i2c_addr, lcd_queue, update_callback, cancel_callback, submit_callback):
-	from smbus import SMBus
 	bus = SMBus(bus_id)
 
 	ROW_COUNT = 4
@@ -336,9 +330,7 @@ def code_exit_cancel(code, lcd_queue):
 	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 	print("Exit code cancel")
 
-# ------------------------------------------------------------------------------
-
-door_queue = queue.Queue()
+# ----- DOOR HANDLING ----------------------------------------------------------
 
 def door_thread():
 	buzzer_pin = 19
@@ -382,13 +374,14 @@ def buzz(buzzer_pwm, t=0.5):
 		time.sleep(t/20)
 	buzzer_pwm.stop()
 
-# ------------------------------------------------------------------------------
+# ----- INIT -------------------------------------------------------------------
 
 try:
+
 	thread_reader_entry = threading.Thread(target=card_thread, group=None, args=[0, 0, 23, LCD_queue_entry, card_entry])
 	thread_reader_entry.start()
 
-	thread_reader_exit = threading.Thread(target=card_thread, group=None, args=[0, 1, 24, LCD_queue_entry, card_exit])
+	thread_reader_exit = threading.Thread(target=card_thread, group=None, args=[0, 1, 24, LCD_queue_exit, card_exit])
 	thread_reader_exit.start()
 
 	thread_lcd_entry = threading.Thread(target=LCD_thread, group=None, args=[0x27, LCD_queue_entry])
