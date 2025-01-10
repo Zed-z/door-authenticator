@@ -123,28 +123,30 @@ def card_unlock(id, lcd_queue, type):
 		else:
 			lcd_queue.put((config.lang["unknown_error_1"], config.lang["unknown_error_2"]))
 
+def card_bind(id, lcd_queue):
+	response = session.get(f'{config.server_ip}/card_bind/{id}')
+	print("Response:", response.status_code, response.text)
+
+	if response.status_code == 200:
+		lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
+		door_queue.put(None)
+	elif response.status_code == 431:
+		lcd_queue.put((config.lang["bind_fail_inuse_1"], config.lang["bind_fail_inuse_2"]))
+	else:
+		lcd_queue.put((config.lang["bind_fail_generic_1"], config.lang["bind_fail_generic_2"]))
+
 def card_entry(id, lcd_queue):
 	print("Entry card:", id)
 
 	if state["bind_user"] != None:
-
-		response = session.get(f'{config.server_ip}/card_bind/{id}')
-		print("Response:", response.status_code, response.text)
-
-		if response.status_code == 200:
-			lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
-			door_queue.put(None)
-		elif response.status_code == 431:
-			lcd_queue.put((config.lang["bind_fail_inuse_1"], config.lang["bind_fail_inuse_2"]))
-		else:
-			lcd_queue.put((config.lang["bind_fail_generic_1"], config.lang["bind_fail_generic_2"]))
-
+		card_bind(id, lcd_queue)
 		state["bind_user"] = None
-
 	else:
 		card_unlock(id, lcd_queue, "entry")
 
 def card_exit(id, lcd_queue):
+	print("Exit card:", id)
+
 	card_unlock(id, lcd_queue, "exit")
 
 # ----- DISPLAY HANDLING -------------------------------------------------------
@@ -290,16 +292,10 @@ def keyboard_thread(bus_id, i2c_addr, lcd_queue, update_callback, cancel_callbac
 	finally:
 		i2c_lock.release()
 
-def code_entry_update(code, lcd_queue):
-	lcd_queue.put((config.lang["code_controls"], "> " + "*" * len(code)))
-	print("Entry code:", code)
-
-def code_entry_submit(code, lcd_queue):
-	print("Entry code submit:", code)
-
+def code_unlock(code, lcd_queue, type):
 	lcd_queue.put((config.lang["code_loading"], None))
 
-	response = session.get(f'{config.server_ip}/code/{code}?type=entry')
+	response = session.get(f'{config.server_ip}/code/{code}?type={type}')
 	print("Response:", response.status_code, response.text)
 
 	if response.status_code == 200:
@@ -313,9 +309,16 @@ def code_entry_submit(code, lcd_queue):
 	else:
 		lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
 
+def code_entry_update(code, lcd_queue):
+	lcd_queue.put((config.lang["code_controls"], "> " + "*" * len(code)))
+	print("Entry code:", code)
+
+def code_entry_submit(code, lcd_queue):
+	print("Entry code submit:", code)
+	code_unlock(code, lcd_queue, "entry")
+
 def code_entry_cancel(code, lcd_queue):
 	code_entry_update(code, lcd_queue)
-	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 	print("Entry code cancel")
 
 def code_exit_update(code, lcd_queue):
@@ -324,10 +327,10 @@ def code_exit_update(code, lcd_queue):
 
 def code_exit_submit(code, lcd_queue):
 	print("Exit code submit:", code)
+	code_unlock(code, lcd_queue, "exit")
 
 def code_exit_cancel(code, lcd_queue):
 	code_exit_update(code, lcd_queue)
-	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 	print("Exit code cancel")
 
 # ----- DOOR HANDLING ----------------------------------------------------------
