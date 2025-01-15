@@ -27,7 +27,7 @@ errors = {
     "card_already_in_use":      ("Karta w użyciu przez kogoś innego!",  431),
     "noone_to_bind":            ("Nie podano użytkownika!",             432),
     "user_doesnt_exist":        ("Nie ma takiego użytkownika!",         433),
-    "outside_access_hours":     ("Outside access hours!",               423)
+    "outside_access_hours":     ("Poza dopuszczalnymi godzinami!",      423)
 }
 
 

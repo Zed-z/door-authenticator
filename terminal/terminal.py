@@ -25,6 +25,9 @@ class Config():
 			"code_wrong_1":				"Zakaz wstepu!",
 			"code_wrong_2":				"Niepopr. kod!",
 
+			"code_no_user_1":			"Zakaz wstepu!",
+			"code_no_user_2":			"Użyt. nie istn.!",
+
 			"card_loading":				"Czekaj...",
 			"card_wrong_1":				"Zakaz wstepu!",
 			"card_wrong_2":				"Niepopr. karta!",
@@ -53,6 +56,8 @@ class Config():
 			"bind_fail_inuse_1":		"Rej. nieudana!",
 			"bind_fail_inuse_2":		"Karta w uzyciu!",
 
+			"bind_no_user_1":			"Rej. nieudana!",
+			"bind_no_user_2":			"Użyt. nie istn.!",
 		}
 
 		if lang == "pl":
@@ -129,9 +134,12 @@ def card_bind(id, lcd_queue):
 
 	if response.status_code == 200:
 		lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
-		door_queue.put(None)
 	elif response.status_code == 431:
 		lcd_queue.put((config.lang["bind_fail_inuse_1"], config.lang["bind_fail_inuse_2"]))
+	elif response.status_code == 432:
+		lcd_queue.put((config.lang["bind_no_user_1"], config.lang["bind_no_user_2"]))
+	elif response.status_code == 433:
+		lcd_queue.put((config.lang["bind_no_user_1"], config.lang["bind_no_user_2"]))
 	else:
 		lcd_queue.put((config.lang["bind_fail_generic_1"], config.lang["bind_fail_generic_2"]))
 
@@ -307,7 +315,18 @@ def code_unlock(code, lcd_queue, type):
 			lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
 			door_queue.put(None)
 	else:
-		lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
+		if response.status_code == 424:
+			lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
+		elif response.status_code == 433:
+			lcd_queue.put((config.lang["code_no_user_1"], config.lang["code_no_user_2"]))
+		elif response.status_code == 421:
+			lcd_queue.put((config.lang["user_limit_1"], config.lang["user_limit_2"]))
+		elif response.status_code == 423:
+			lcd_queue.put((config.lang["outside_hours_1"], config.lang["outside_hours_2"]))
+		elif response.status_code == 422:
+			lcd_queue.put((config.lang["not_in_room_1"], config.lang["not_in_room_2"]))
+		else:
+			lcd_queue.put((config.lang["unknown_error_1"], config.lang["unknown_error_2"]))
 
 def code_entry_update(code, lcd_queue):
 	lcd_queue.put((config.lang["code_controls"], "> " + "*" * len(code)))
