@@ -9,7 +9,7 @@
 <body>
 
 <div>
-    <h1>Witaj, <span class="username">{{ admin.imie_nazwisko }}</span>!</h1>
+    <h1>Witaj, <span class="username">{{ admin.display_name }}</span>!</h1>
     <form action="/logout">
         <input type="submit" value="Wyloguj się"/>
     </form>
@@ -37,11 +37,11 @@
             <tr>
                 <td>{{ user.id }}</td>
                 <td>{{ user.name }}</td>
-                <td>{{ user.imie_nazwisko }}</td>
-                <td>{{ user.is_admin }}</td>
+                <td>{{ user.display_name }}</td>
+                <td>{{ user.type }}</td>
                 <td>{{ user.card_id }}</td>
                 <td>
-                    {% if user.is_admin != 'A' %}
+                    {% if user.type != 'A' %}
                     <form action="/delete/{{user.id}}">
                         <input type="submit" value="Usuń"/>
                     </form>
@@ -58,7 +58,7 @@
 
         <input type= "text" name="name" placeholder="Nazwa Użytkownika">
         <br>
-        <input type= "text" name="fullname" placeholder="Imię i Nazwisko">
+        <input type= "text" name="display_name" placeholder="Imię i Nazwisko">
         <br>
         <label>
             <input type="checkbox" name="is_admin", value="true">
@@ -98,7 +98,7 @@
         Użytkownik:
         <select name="user_id">
             {% for user in users %}
-            <option value="{{ user.id }}">{{ user.imie_nazwisko }} ({{ user.name }})</option>
+            <option value="{{ user.id }}">{{ user.display_name }} ({{ user.name }})</option>
             {% endfor %}
         </select>
         <br>
