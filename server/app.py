@@ -10,23 +10,26 @@ import bcrypt
 from datetime import datetime
 #endregion
 
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.secret_key = '!@#$%^&*()!@#$%^&*()!@#$%^&*()'
 
 # Komunikaty z błędami
 errors = {
-    "post_only":            ("Ten adres przyjmuje tylko POST!",     400),
-    "admin_only":           ("Dostęp tylko dla administratorów!",   499),
-    "unknown_error":        ("Nieznany błąd!",                      400),
-    "invalid_card":         ("Niepoprawna karta!",                  420),
-    "invalid_card":         ("Niepoprawny kod!",                    420),
-    "user_limit_reached":   ("Limit użytkowników osiągnięty!",      421),
-    "user_not_in_room":     ("Użytkownik nie jest w środku!",       422),
-    "card_already_in_use":  ("Karta w użyciu przez kogoś innego!",  431),
-    "noone_to_bind":        ("Nie podano użytkownika!",             400),
-    "user_doesnt_exist":    ("Nie ma takiego użytkownika!",         400)
+    "post_only":                ("Ten adres przyjmuje tylko POST!",     400),
+    "admin_only":               ("Dostęp tylko dla administratorów!",   499),
+    "unknown_error":            ("Nieznany błąd!",                      400),
+    "invalid_card":             ("Niepoprawna karta!",                  420),
+    "invalid_code":             ("Niepoprawny kod!",                    424),
+    "user_limit_reached":       ("Limit użytkowników osiągnięty!",      421),
+    "user_not_in_room":         ("Użytkownik nie jest w środku!",       422),
+    "card_already_in_use":      ("Karta w użyciu przez kogoś innego!",  431),
+    "noone_to_bind":            ("Nie podano użytkownika!",             432),
+    "user_doesnt_exist":        ("Nie ma takiego użytkownika!",         433),
+    "outside_access_hours":     ("Outside access hours!",               423)
 }
+
 
 #region Definicja bazy danych ------------------------------------------------------------------------------------------
 
@@ -52,6 +55,7 @@ class users(db.Model):
     def _repr_(self):
         return '<User %r>' % self.id % "  " % self.name
 
+# Funkcja do rejestracji użytkownika
 def user_register(name, password, display_name, type, card_id):
     salt = bcrypt.gensalt()
     passw = password_hash(password, salt)
@@ -63,10 +67,12 @@ def user_register(name, password, display_name, type, card_id):
     print(f"Registered user {name}")
     return user
 
+# Funkcja do logowania użytkownika
+# Zwraca rekord użytkownika albo None
 def user_login(name, password):
     user = users.query.filter(users.name == name).first()
 
-    confi =  config.query.first()
+    confi = config.query.first()
     if not confi.require_password:
         return (user)
 
@@ -79,6 +85,7 @@ def user_login(name, password):
 
     return (user)
 
+# Funkcja wyliczająca hash hasła
 def password_hash(password, salt):
     p = password.encode("utf-8")
     bcrypt.hashpw(p, salt)
@@ -98,23 +105,27 @@ class access_codes(db.Model):
     def __str__(self):
         return '<Code %r>' % self.code
 
+# Funkcja generująca kody jednorazowe
 def generate_access_code(user, bind_user):
 
-    # Delete expired codes
+    # Usuń przestarzałe kody
     access_codes.query.filter(access_codes.expires < time.time()).delete()
     db.session.commit()
 
-    # Unique code guarantee
+    # Generacja losowego kodu (Z gwarancją unikalności)
     while True:
         code = "".join([str(random.randint(0, 9)) for _ in range(6)])
         duplicates = access_codes.query.filter(access_codes.code == code).all()
         if len(duplicates) == 0:
             break
 
+    # Ustawienie czasu wygaśnięcia kodu
     expires = time.time() + 120
 
+    # Ustawienie trybu przypisania kodu
     bind_user_bool = "Y" if bind_user else "N"
 
+    # Dodanie kodu do bazy danych
     db.session.add(access_codes(user_id = user.id, code = code, bind_user = bind_user_bool, expires = expires))
     db.session.commit()
 
@@ -193,6 +204,7 @@ class user_presence(db.Model):
 def root():
     if request.method == 'POST':
 
+        # Odczytaj formularz
         login = request.form['login']
         password = request.form['password']
 
@@ -200,8 +212,10 @@ def root():
             user = user_login(login, password)
             assert(user != None)
 
-            log = logs(user_id=user.id,time_stamp=time.time(), message="logged in")
+            # Odnotuj zdarzenie
+            log = logs(user_id=user.id,time_stamp=time.time(), message=" zalogował się")
 
+            # Przekieruj na stronę administratora
             if user.type == "A":
                 resp = make_response(redirect(url_for("admin")))
                 resp.set_cookie('login', login)
@@ -209,6 +223,7 @@ def root():
                 db.session.commit()
                 return resp
 
+            # Przekieruj na stronę użytkownika
             elif user.type == "N":
                 resp = make_response(redirect(url_for("user")))
                 resp.set_cookie('login', login)
@@ -229,41 +244,67 @@ def root():
 @app.route('/admin', methods=['GET','POST'])
 def admin():
     try:
+        # Znajdź rekord użytkownika
         u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
         assert(u != None)
+
+        # Wygeneruj kody jednorazowe
         code = generate_access_code(u, u.card_id == None)
         bind_code = generate_access_code(u, True) if u.card_id == None else None
+
     except Exception as e:
         print(repr(e))
         return errors["admin_only"]
 
+    # Wyszukaj potrzebne administratorowi dane
     us = users.query.order_by(users.name).all()
     presences = user_presence.query.all()
     conf = config.query.first()
-
     alerts = get_flashed_messages(with_categories=True)
-    return render_template('admin.html', alerts=alerts, users=us, presences=presences, config=conf, code=code, bind_code=bind_code, admin=u, logs = logs.query.all(), access_hours=access_hours.query.all())
+
+    return render_template('admin.html',
+        alerts=alerts,
+        users=us,
+        presences=presences,
+        config=conf,
+        code=code,
+        bind_code=bind_code,
+        admin=u,
+        logs=logs.query.all(),
+        access_hours=access_hours.query.all()
+    )
 
 
 # Strona użytkownika
 @app.route('/user', methods=['GET','POST'])
 def user():
     try:
+        # Znajdź rekord użytkownika
         print(request.cookies.get('login'))
         user = users.query.filter(users.name == request.cookies.get('login')).first()
         assert(user != None)
+
+        # Wygeneruj kody jednorazowe
         code = generate_access_code(user, False)
         bind_code = generate_access_code(user, True) if user.card_id == None else None
+
     except Exception as e:
         print(repr(e))
-        return "error"
+        return errors["unknown_error"]
 
+    # Wyszukaj potrzebne użytkownikowi dane
     user_logs = logs.query.filter(logs.user_id == user.id).all()
-
     hours = access_hours.query.filter(access_hours.user_id == user.id).all()
-
     alerts = get_flashed_messages(with_categories=True)
-    return render_template('user.html', alerts=alerts, user=user, code=code, bind_code=bind_code, logs = user_logs, access_hours=hours)
+
+    return render_template('user.html',
+        alerts=alerts,
+        user=user,
+        code=code,
+        bind_code=bind_code,
+        logs=user_logs,
+        access_hours=hours
+    )
 
 
 # Wylogowanie się
@@ -475,7 +516,7 @@ def handle_card(card_id):
                         log = logs(user_id=user.id, time_stamp=time.time(), message=" próbował wejść poza godzinami!")
                         db.session.add(log)
                         db.session.commit()
-                        return "Outside access hours!", 423
+                        return errors["outside_access_hours"]
                     else:
                         log = logs(user_id=user.id, time_stamp=time.time(), message=" wszedł poza godzinami!")
                         db.session.add(log)
@@ -493,17 +534,17 @@ def handle_card(card_id):
         # Wyjście
         elif type == 'exit':
 
+            # Nie wypuszczaj w przypadku braku obecności w sali (podejrzana sytuacja), ale zawsze wypuść administratorów
+            if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
+                if user.type == 'N':
+                    return errors["user_not_in_room"]
+
             # Sprawdź czy użytkownik wyszedł poza dopuszczalnymi godzinami i ewentualnie odnotuj
             if config.query.first().enforce_access_hours:
                 if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
                     log = logs(user_id=user.id, time_stamp=time.time(), message=" wyszedł poza godzinami!")
                     db.session.add(log)
                     db.session.commit()
-
-            # Nie wypuszczaj w przypadku braku obecności w sali (podejrzana sytuacja), ale zawsze wypuść administratorów
-            if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
-                if user.type == 'N':
-                    return errors["user_not_in_room"]
 
             # Usuń wpis o obecności użytkownika
             user_presence.query.filter(user_presence.user_id == user.id).delete()
@@ -539,6 +580,7 @@ def handle_code(code):
         # Wyszukaj dane na bazie kodu
         user = users.query.filter(users.id == code.user_id).first()
         bind_user = code.bind_user
+        now = datetime.now()
 
         # Usuń wykorzystany kod
         code_q.delete()
@@ -556,6 +598,19 @@ def handle_code(code):
                 if user.type == 'N':
                     return errors["user_limit_reached"]
 
+            # Odnotuj próbę wejścia poza dopuszczalnymi godzinami, ale zawsze wpuść administratorów
+            if config.query.first().enforce_access_hours:
+                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                    if user.type == 'N':
+                        log = logs(user_id=user.id, time_stamp=time.time(), message=" próbował wejść poza godzinami!")
+                        db.session.add(log)
+                        db.session.commit()
+                        return errors["outside_access_hours"]
+                    else:
+                        log = logs(user_id=user.id, time_stamp=time.time(), message=" wszedł poza godzinami!")
+                        db.session.add(log)
+                        db.session.commit()
+
             # Dodaj wpis o obecności użytkownika
             db.session.add(user_presence(user_id=user.id, time_stamp=time.time()))
             db.session.commit()
@@ -567,6 +622,13 @@ def handle_code(code):
             if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
                 if user.type == 'N':
                     return errors["user_not_in_room"]
+
+            # Sprawdź czy użytkownik wyszedł poza dopuszczalnymi godzinami i ewentualnie odnotuj
+            if config.query.first().enforce_access_hours:
+                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                    log = logs(user_id=user.id, time_stamp=time.time(), message=" wyszedł poza godzinami!")
+                    db.session.add(log)
+                    db.session.commit()
 
             # Usuń wpis o obecności użytkownika
             user_presence.query.filter(user_presence.user_id == user.id).delete()
