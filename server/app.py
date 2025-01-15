@@ -14,8 +14,6 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.secret_key = '!@#$%^&*()!@#$%^&*()!@#$%^&*()'
 
-db = SQLAlchemy(app)
-
 # Komunikaty z błędami
 errors = {
     "post_only":            ("Ten adres przyjmuje tylko POST!",     400),
@@ -30,27 +28,16 @@ errors = {
     "user_doesnt_exist":    ("Nie ma takiego użytkownika!",         400)
 }
 
+#region Definicja bazy danych ------------------------------------------------------------------------------------------
+
+db = SQLAlchemy(app)
+
 # Konfiguracja serwera
 class config(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_limit = db.Column(db.Integer)
     enforce_access_hours = db.Column(db.Integer)
     require_password = db.Column(db.Integer)
-
-@app.route('/config',methods=['GET','POST'])
-def configure():
-    if request.method != "POST":
-        return errors["post_only"]
-
-    configuration = config.query.first()
-
-    configuration.require_password =  1 if request.form.get('require_password') else 0
-
-    configuration.enforce_access_hours = 1 if request.form.get('enforce_access_hours') else 0
-    configuration.user_limit = request.form['user_limit']
-    db.session.commit()
-
-    return redirect(url_for('admin'))
 
 # Użytkownicy
 class users(db.Model):
@@ -83,7 +70,6 @@ def user_login(name, password):
     if not confi.require_password:
         return (user)
 
-    
     if user == None:
         return None
 
@@ -197,7 +183,12 @@ class user_presence(db.Model):
     def date(self):
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.time_stamp))
 
+#endregion -------------------------------------------------------------------------------------------------------------
 
+
+#region Strony ---------------------------------------------------------------------------------------------------------
+
+# Strona główna / strona logowania
 @app.route('/', methods=['GET','POST'])
 def root():
     if request.method == 'POST':
@@ -225,8 +216,6 @@ def root():
                 db.session.commit()
                 return resp
 
-
-
         except Exception as e:
             print(e)
             flash('Niepowodzenie logowania!', "error")
@@ -236,61 +225,7 @@ def root():
     return render_template('index.html', alerts=alerts)
 
 
-@app.route('/permsadd', methods=['POST'])
-def permsadd():
-    try:
-        print(request.cookies.get('login'))
-        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
-        assert(u != None)
-    except:
-        return errors["admin_only"]
-
-    try:
-        start_hour = datetime.strptime(request.form["start_hour"], '%H:%M').time()
-        end_hour = datetime.strptime(request.form["end_hour"], '%H:%M').time()
-        if start_hour >= end_hour:
-            flash("Niewłaściwy przedział czasu!", "error")
-            return redirect(url_for("admin"))
-
-        ah = access_hours(user_id=request.form["user_id"], week_day=request.form["week_day"], start_hour=start_hour, end_hour=end_hour)
-        db.session.add(ah)
-        db.session.commit()
-        log = logs(user_id=u.id, time_stamp=time.time(), message="added permission " + str(ah.id))
-        db.session.add(log)
-        db.session.commit()
-
-        flash("Nadano uprawnienia.", "info")
-        return redirect(url_for("admin"))
-
-    except:
-        flash("Nie udało się nadać uprawnień!", "error")
-        return redirect(url_for("admin"))
-
-@app.route('/permsdelete/<int:id>', methods=['POST', 'GET'])
-def permsdelete(id):
-    try:
-        print(request.cookies.get('login'))
-        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
-        assert(u != None)
-    except Exception as e:
-        print(repr(e))
-        return errors["admin_only"]
-
-    try:
-        access_hours.query.filter(access_hours.id == id).delete()
-        db.session.commit()
-        log = logs(user_id=u.id, time_stamp=time.time(), message="deleted permission " + str(id))
-        db.session.add(log)
-        db.session.commit()
-
-        flash("Odebrano uprawnienia.", "info")
-        return redirect(url_for("admin"))
-
-    except Exception as e:
-        print(repr(e))
-        flash("Nie udało się odebrać uprawnień!", "error")
-        return redirect(url_for("admin"))
-
+# Strona administratora
 @app.route('/admin', methods=['GET','POST'])
 def admin():
     try:
@@ -310,6 +245,7 @@ def admin():
     return render_template('admin.html', alerts=alerts, users=us, presences=presences, config=conf, code=code, bind_code=bind_code, admin=u, logs = logs.query.all(), access_hours=access_hours.query.all())
 
 
+# Strona użytkownika
 @app.route('/user', methods=['GET','POST'])
 def user():
     try:
@@ -330,20 +266,142 @@ def user():
     return render_template('user.html', alerts=alerts, user=user, code=code, bind_code=bind_code, logs = user_logs, access_hours=hours)
 
 
+# Wylogowanie się
+@app.route("/logout", methods=['POST','GET'])
+def logout():
+    resp = redirect(url_for("root"))
+    resp.set_cookie("login", '', expires=0)
+    return resp
+
+#endregion -------------------------------------------------------------------------------------------------------------
+
+
+#region Czynności administracyjne --------------------------------------------------------------------------------------
+
+# Zmiana konfiguracji
+@app.route('/config',methods=['GET','POST'])
+def configure():
+    if request.method != "POST":
+        return errors["post_only"]
+
+    # Dostęp tylko dla administratorów
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
+        assert(u != None)
+    except:
+        return errors["admin_only"]
+
+    # Znajdź i zmodyfikuj rekord z konfiguracją
+    configuration = config.query.first()
+    configuration.require_password =  1 if request.form.get('require_password') else 0
+    configuration.enforce_access_hours = 1 if request.form.get('enforce_access_hours') else 0
+    configuration.user_limit = request.form['user_limit']
+    db.session.commit()
+
+    return redirect(url_for('admin'))
+
+
+# Nadanie uprawnień użytkownikowi
+@app.route('/permsadd', methods=['POST'])
+def permsadd():
+
+    # Dostęp tylko dla administratorów
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
+        assert(u != None)
+    except:
+        return errors["admin_only"]
+
+    try:
+        # Odczytaj formularz
+        user_id = request.form["user_id"]
+        week_day = request.form["week_day"]
+
+        start_hour = datetime.strptime(request.form["start_hour"], '%H:%M').time()
+        end_hour = datetime.strptime(request.form["end_hour"], '%H:%M').time()
+        if start_hour >= end_hour:
+            flash("Niewłaściwy przedział czasu!", "error")
+            return redirect(url_for("admin"))
+
+        # Dodaj uprawnienia
+        ah = access_hours(user_id=user_id, week_day=week_day, start_hour=start_hour, end_hour=end_hour)
+        db.session.add(ah)
+        db.session.commit()
+
+        # Odnotuj zdarzenie
+        log = logs(user_id=u.id, time_stamp=time.time(), message=" dodał uprawnienia " + str(ah.id))
+        db.session.add(log)
+        db.session.commit()
+
+        flash("Nadano uprawnienia.", "info")
+        return redirect(url_for("admin"))
+
+    except:
+        flash("Nie udało się nadać uprawnień!", "error")
+        return redirect(url_for("admin"))
+
+
+# Odebranie uprawnień pracownikowi
+@app.route('/permsdelete/<int:id>', methods=['POST', 'GET'])
+def permsdelete(id):
+
+    # Dostęp tylko dla administratorów
+    try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
+        assert(u != None)
+    except Exception as e:
+        print(repr(e))
+        return errors["admin_only"]
+
+    try:
+        # Odbierz uprawnienia
+        access_hours.query.filter(access_hours.id == id).delete()
+        db.session.commit()
+
+        # Odnotuj zdarzenie
+        log = logs(user_id=u.id, time_stamp=time.time(), message=" usunął uprawnienia " + str(id))
+        db.session.add(log)
+        db.session.commit()
+
+        flash("Odebrano uprawnienia.", "info")
+        return redirect(url_for("admin"))
+
+    except Exception as e:
+        print(repr(e))
+        flash("Nie udało się odebrać uprawnień!", "error")
+        return redirect(url_for("admin"))
+
+
+# Dodanie użytkownika
 @app.route("/useradd",methods=['POST'])
 def useradd():
     if request.method != "POST":
         return errors["post_only"]
 
+    # Dostęp tylko dla administratorów
     try:
+        print(request.cookies.get('login'))
+        u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
+        assert(u != None)
+    except:
+        return errors["admin_only"]
+
+    try:
+        # Odczytaj formularz
         username = request.form['name']
         display_name = request.form['display_name']
         password = request.form['passwd']
-
         user_type = "A" if request.form.get('is_admin') else "N"
-        user = user_register(username,password,display_name,user_type,None)
 
-        log = logs(user_id=users.query.filter(users.name == request.cookies.get('login')).first().id, time_stamp=time.time(), message="added user " + user.display_name)
+        # Dodaj użytkownika
+        user = user_register(username,password,display_name,user_type,None)
+        assert(user != None)
+
+        # Odnotuj zdarzenie
+        log = logs(user_id=u.id, time_stamp=time.time(), message=" dodał użytkownika " + display_name)
         db.session.add(log)
         db.session.commit()
 
@@ -355,8 +413,12 @@ def useradd():
         flash("Nie udało się dodać pracownika!", "error")
         return redirect(url_for("admin"))
 
+
+# Usunięcie użytkownika
 @app.route("/userdelete/<int:idtifier>",methods=['POST','GET'])
 def userdelete(idtifier):
+
+    # Dostęp tylko dla administratorów
     try:
         print(request.cookies.get('login'))
         u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
@@ -365,9 +427,12 @@ def userdelete(idtifier):
         return errors["admin_only"]
 
     try:
+        # Usuń użytkownika 
         users.query.filter(users.id == idtifier).delete()
         db.session.commit()
-        log = logs(user_id=u.id, time_stamp=time.time(), message="deleted user" + str(idtifier))
+
+        # Odnotuj zdarzenie
+        log = logs(user_id=u.id, time_stamp=time.time(), message=" usunął użytkownika " + str(idtifier))
         db.session.add(log)
         db.session.commit()
 
@@ -378,6 +443,8 @@ def userdelete(idtifier):
         print(e)
         flash("Nie udało się usunąć pracownika!", "error")
         return redirect(url_for("admin"))
+
+#endregion -------------------------------------------------------------------------------------------------------------
 
 
 #region Obsługa terminala ----------------------------------------------------------------------------------------------
@@ -565,14 +632,6 @@ def handle_card_bind(card_id):
         return errors["unknown_error"]
 
 #endregion -------------------------------------------------------------------------------------------------------------
-
-
-# Wylogowanie się
-@app.route("/logout", methods=['POST','GET'])
-def logout():
-    resp = redirect(url_for("root"))
-    resp.set_cookie("login", '', expires=0)
-    return resp
 
 
 # Jednorazowe przygotowanie bazy danych
