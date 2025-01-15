@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <title>Twoje konto w systemie drzwi</title>
     <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 
 <div>
-    <h1>Witaj, <span class="username">{{ user.imie_nazwisko }}</span>!</h1>
+    <h1>Witaj, <span class="username">{{ user.display_name }}</span>!</h1>
     <form action="/logout">
         <input type="submit" value="Wyloguj się"/>
     </form>
@@ -16,8 +17,10 @@
 
 <div>
     <h1>Kod jednorazowy: <em>{{ code }}</em>!</h1>
+    {% if bind_code is not none %}
+        <h1>Kod rejestracji karty: <em>{{ bind_code }}</em>!</h1>
+    {% endif %}
 </div>
-
 
 <div>
     <h2>Prawa dostępu:</h2>

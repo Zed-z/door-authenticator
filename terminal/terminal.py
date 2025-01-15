@@ -1,36 +1,88 @@
-#!/usr/bin/env python
-# MFRC522
-# requests
-
 import RPi.GPIO as GPIO
-from SimplerMFRC522 import *
 import time
 import threading
-
-from LCD import LCD
-
 import queue
 from queue import Empty
-import spidev
 import requests
-
-import config
+from unidecode import unidecode
 
 GPIO.setmode(GPIO.BCM)
+
+# ----- CONFIG -----------------------------------------------------------------
+
+class Config():
+	def __init__(self, lang):
+		self.server_ip = "http://localhost:5000"
+		self.inactivity_timeout = 5
+		self.buzzer_mute = True
+
+		self.lang_pl = {
+			"welcome_1":				"--System Drzwi--",
+			"welcome_2":				" KARTA  //  KOD ",
+
+			"code_controls":			"* OK    # ANULUJ",
+			"code_loading":				"Czekaj...",
+			"code_wrong_1":				"Zakaz wstepu!",
+			"code_wrong_2":				"Niepopr. kod!",
+
+			"card_loading":				"Czekaj...",
+			"card_wrong_1":				"Zakaz wstepu!",
+			"card_wrong_2":				"Niepopr. karta!",
+
+			"outside_hours_1":			"Zakaz wstepu!",
+			"outside_hours_2":			"Poza godzinami!",
+
+			"user_limit_1":				"Zakaz wstepu!",
+			"user_limit_2":				"Przeludnienie!",
+
+			"not_in_room_1":			"Zakaz wstepu!",
+			"not_in_room_2":			"Nie jest w sali!",
+
+			"unknown_error_1":			"Zakaz wstepu!",
+			"unknown_error_2":			"Nieznany blad!",
+
+			"card_bind_1":				"Przyloz karte,",
+			"card_bind_2":				"aby przypisac...",
+
+			"auth_ok_1":				"Witaj, {name}!",
+			"auth_ok_2":				"Drzwi otwarte.",
+
+			"bind_fail_generic_1":		"Rej. nieudana!",
+			"bind_fail_generic_2":		"Sprob. ponownie!",
+
+			"bind_fail_inuse_1":		"Rej. nieudana!",
+			"bind_fail_inuse_2":		"Karta w uzyciu!",
+
+		}
+
+		if lang == "pl":
+			self.lang = self.lang_pl
+		else:
+			self.lang = self.lang_pl
+
+# ----- SHARED VARIABLES -------------------------------------------------------
+
+i2c_lock = threading.Lock()
+spi_lock = threading.Lock()
+LCD_queue_entry = queue.Queue()
+LCD_queue_exit = queue.Queue()
+door_queue = queue.Queue()
+config = Config("pl")
 
 session = requests.Session()
 state = {
 	"bind_user": None # The id of the user to bind to the next scanned card, if not None
 }
 
-# ------------------------------------------------------------------------------
+# ----- CARD HANDLING ----------------------------------------------------------
 
-spi_lock = threading.Lock()
+from mfrc522 import *
 
 def card_thread(bus_id, device_id, reset_pin, lcd_queue, callback):
 
 	spi_lock.acquire()
-	reader = SimplerMFRC522(bus=bus_id, device=device_id, pin_rst=reset_pin)
+	reader = SimpleMFRC522.__new__(SimpleMFRC522)
+	reader.READER = MFRC522(bus=bus_id, device=device_id, pin_rst=reset_pin)
 	spi_lock.release()
 
 	id_prev = None
@@ -50,47 +102,56 @@ def card_thread(bus_id, device_id, reset_pin, lcd_queue, callback):
 
 		time.sleep(0.5)
 
+def card_unlock(id, lcd_queue, type):
+	lcd_queue.put((config.lang["card_loading"], ""))
+
+	response = session.get(f'{config.server_ip}/card/{id}?type={type}')
+	print("Response:", response.status_code, response.text)
+
+	if response.status_code == 200:
+		lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
+		door_queue.put(None)
+	else:
+		if response.status_code == 423:
+			lcd_queue.put((config.lang["outside_hours_1"], config.lang["outside_hours_2"]))
+		elif response.status_code == 421:
+			lcd_queue.put((config.lang["user_limit_1"], config.lang["user_limit_2"]))
+		elif response.status_code == 422:
+			lcd_queue.put((config.lang["not_in_room_1"], config.lang["not_in_room_2"]))
+		elif response.status_code == 420:
+			lcd_queue.put((config.lang["card_wrong_1"], config.lang["card_wrong_2"]))
+		else:
+			lcd_queue.put((config.lang["unknown_error_1"], config.lang["unknown_error_2"]))
+
+def card_bind(id, lcd_queue):
+	response = session.get(f'{config.server_ip}/card_bind/{id}')
+	print("Response:", response.status_code, response.text)
+
+	if response.status_code == 200:
+		lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
+		door_queue.put(None)
+	elif response.status_code == 431:
+		lcd_queue.put((config.lang["bind_fail_inuse_1"], config.lang["bind_fail_inuse_2"]))
+	else:
+		lcd_queue.put((config.lang["bind_fail_generic_1"], config.lang["bind_fail_generic_2"]))
+
 def card_entry(id, lcd_queue):
 	print("Entry card:", id)
 
 	if state["bind_user"] != None:
-
-		response = session.get(f'{config.server_ip}/card_bind/{id}')
-		print("Response:", response.status_code, response.text)
-
-		if response.status_code == 200:
-			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
-			door_queue.put(None)
-		elif response.status_code == 431:
-			lcd_queue.put((config.lang["bind_fail_inuse_1"], config.lang["bind_fail_inuse_2"]))
-		else:
-			lcd_queue.put((config.lang["bind_fail_generic_1"], config.lang["bind_fail_generic_2"]))
-
+		card_bind(id, lcd_queue)
 		state["bind_user"] = None
-
 	else:
-
-		lcd_queue.put((config.lang["card_loading"], ""))
-
-		response = session.get(f'{config.server_ip}/card/{id}')
-		print("Response:", response.status_code, response.text)
-
-		if response.status_code == 200:
-			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
-			door_queue.put(None)
-		else:
-			lcd_queue.put((config.lang["card_wrong_1"], config.lang["card_wrong_2"]))
-
+		card_unlock(id, lcd_queue, "entry")
 
 def card_exit(id, lcd_queue):
 	print("Exit card:", id)
 
+	card_unlock(id, lcd_queue, "exit")
 
-# ------------------------------------------------------------------------------
+# ----- DISPLAY HANDLING -------------------------------------------------------
 
-i2c_lock = threading.Lock()
-LCD_queue_entry = queue.Queue()
-LCD_queue_exit = queue.Queue()
+from LCD import LCD # https://github.com/sterlingbeason/LCD-1602-I2C/blob/master/LCD.py
 
 def LCD_thread(i2c_addr, queue):
 
@@ -99,11 +160,9 @@ def LCD_thread(i2c_addr, queue):
 	i2c_lock.release()
 	queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 
-	inactivity_timeout = 5
-
 	while True:
 		try:
-			(top, bottom) = queue.get(block=True, timeout=inactivity_timeout)
+			(top, bottom) = queue.get(block=True, timeout=config.inactivity_timeout)
 
 			if top != None:
 				i2c_lock.acquire()
@@ -139,7 +198,6 @@ def OLED_display_text(oled, oled_top, oled_bottom):
 	oled.image(image)
 	oled.show()
 
-
 def OLED_thread(i2c_addr, queue):
 
 	i2c_lock.acquire()
@@ -155,12 +213,10 @@ def OLED_thread(i2c_addr, queue):
 	i2c_lock.release()
 	queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 
-	inactivity_timeout = 5
-
 	try:
 		while True:
 			try:
-				(top, bottom) = queue.get(block=True, timeout=inactivity_timeout)
+				(top, bottom) = queue.get(block=True, timeout=config.inactivity_timeout)
 
 				if top != None:
 					oled_top = top
@@ -182,10 +238,11 @@ def OLED_thread(i2c_addr, queue):
 		oled.fill(0)
 		oled.show()
 
-# ------------------------------------------------------------------------------
+# ----- CODE HANDLING ----------------------------------------------------------
+
+from smbus import SMBus
 
 def keyboard_thread(bus_id, i2c_addr, lcd_queue, update_callback, cancel_callback, submit_callback):
-	from smbus import SMBus
 	bus = SMBus(bus_id)
 
 	ROW_COUNT = 4
@@ -235,16 +292,10 @@ def keyboard_thread(bus_id, i2c_addr, lcd_queue, update_callback, cancel_callbac
 	finally:
 		i2c_lock.release()
 
-def code_entry_update(code, lcd_queue):
-	lcd_queue.put((config.lang["code_controls"], "> " + "*" * len(code)))
-	print("Entry code:", code)
-
-def code_entry_submit(code, lcd_queue):
-	print("Entry code submit:", code)
-
+def code_unlock(code, lcd_queue, type):
 	lcd_queue.put((config.lang["code_loading"], None))
 
-	response = session.get(f'{config.server_ip}/code/{code}')
+	response = session.get(f'{config.server_ip}/code/{code}?type={type}')
 	print("Response:", response.status_code, response.text)
 
 	if response.status_code == 200:
@@ -253,14 +304,21 @@ def code_entry_submit(code, lcd_queue):
 		if state["bind_user"] != None:
 			lcd_queue.put((config.lang["card_bind_1"], config.lang["card_bind_2"]))
 		else:
-			lcd_queue.put((config.lang["auth_ok_1"].format(name=response.text), config.lang["auth_ok_2"].format(name=response.text)))
+			lcd_queue.put((config.lang["auth_ok_1"].format(name=unidecode(response.text)), config.lang["auth_ok_2"].format(name=unidecode(response.text))))
 			door_queue.put(None)
 	else:
 		lcd_queue.put((config.lang["code_wrong_1"], config.lang["code_wrong_2"]))
 
+def code_entry_update(code, lcd_queue):
+	lcd_queue.put((config.lang["code_controls"], "> " + "*" * len(code)))
+	print("Entry code:", code)
+
+def code_entry_submit(code, lcd_queue):
+	print("Entry code submit:", code)
+	code_unlock(code, lcd_queue, "entry")
+
 def code_entry_cancel(code, lcd_queue):
 	code_entry_update(code, lcd_queue)
-	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 	print("Entry code cancel")
 
 def code_exit_update(code, lcd_queue):
@@ -269,15 +327,13 @@ def code_exit_update(code, lcd_queue):
 
 def code_exit_submit(code, lcd_queue):
 	print("Exit code submit:", code)
+	code_unlock(code, lcd_queue, "exit")
 
 def code_exit_cancel(code, lcd_queue):
 	code_exit_update(code, lcd_queue)
-	#lcd_queue.put((config.lang["welcome_1"], config.lang["welcome_2"]))
 	print("Exit code cancel")
 
-# ------------------------------------------------------------------------------
-
-door_queue = queue.Queue()
+# ----- DOOR HANDLING ----------------------------------------------------------
 
 def door_thread():
 	buzzer_pin = 19
@@ -311,19 +367,24 @@ def door_thread():
 		GPIO.output(door_pin, GPIO.LOW)
 
 def buzz(buzzer_pwm, t=0.5):
+	if config.buzzer_mute:
+		time.sleep(t)
+		return
+
 	buzzer_pwm.start(0)
 	for dc in range(0, 101, 5):
 		buzzer_pwm.ChangeDutyCycle(dc)
 		time.sleep(t/20)
 	buzzer_pwm.stop()
 
-# ------------------------------------------------------------------------------
+# ----- INIT -------------------------------------------------------------------
 
 try:
+
 	thread_reader_entry = threading.Thread(target=card_thread, group=None, args=[0, 0, 23, LCD_queue_entry, card_entry])
 	thread_reader_entry.start()
 
-	thread_reader_exit = threading.Thread(target=card_thread, group=None, args=[0, 1, 24, LCD_queue_entry, card_exit])
+	thread_reader_exit = threading.Thread(target=card_thread, group=None, args=[0, 1, 24, LCD_queue_exit, card_exit])
 	thread_reader_exit.start()
 
 	thread_lcd_entry = threading.Thread(target=LCD_thread, group=None, args=[0x27, LCD_queue_entry])

@@ -9,9 +9,51 @@
 <body>
 
 <div>
-    <h1>Witaj, <span class="username">{{ admin }}</span>!</h1>
+    <h1>Witaj, <span class="username">{{ admin.display_name }}</span>!</h1>
     <form action="/logout">
         <input type="submit" value="Wyloguj się"/>
+    </form>
+</div>
+
+<div>
+    <h1>Kod jednorazowy: <em>{{ code }}</em>!</h1>
+    {% if bind_code is not none %}
+        <h1>Kod rejestracji karty: <em>{{ bind_code }}</em>!</h1>
+    {% endif %}
+</div>
+
+<div>
+    <h2>Aktualnie w pomieszczeniu:</h2>
+    <table>
+        <tr>
+            <th>Użytkownik</th>
+            <th>Pobyt od</th>
+        </tr>
+        {% if presences %}
+            {% for presence in presences %}
+                <tr>
+                    <td>{{ presence.user_name }}</td>
+                    <td>{{ presence.date }}</td>
+                </tr>
+            {% endfor %}
+        {% else %}
+            <tr><td>(brak)</td><td></td></tr>
+        {% endif %}
+    </table>
+</div>
+
+<div>
+    TODO: NIE DZIALA, NIE MA NIC OD STRONY SERWERA
+    <h2>Konfiguracja:</h2>
+    <form action="/config">
+        Limit osób: <input type="number" name="user_limit" value="{{ config.user_limit }}">
+        <br>
+        <label>
+            <input type="checkbox" name="enforce_access_hours" {% if config.enforce_access_hours == 1 %}checked{% endif %}>
+            Sprawdzaj godziny wejścia
+        </label>
+        <br>
+        <input type="submit" value="Wprowadź zmiany"/>
     </form>
 </div>
 
@@ -30,11 +72,11 @@
             <tr>
                 <td>{{ user.id }}</td>
                 <td>{{ user.name }}</td>
-                <td>{{ user.imie_nazwisko }}</td>
-                <td>{{ user.is_admin }}</td>
+                <td>{{ user.display_name }}</td>
+                <td>{{ user.type }}</td>
                 <td>{{ user.card_id }}</td>
                 <td>
-                    {% if user.is_admin != 'A' %}
+                    {% if user.type != 'A' %}
                     <form action="/delete/{{user.id}}">
                         <input type="submit" value="Usuń"/>
                     </form>
@@ -51,7 +93,7 @@
 
         <input type= "text" name="name" placeholder="Nazwa Użytkownika">
         <br>
-        <input type= "text" name="fullname" placeholder="Imię i Nazwisko">
+        <input type= "text" name="display_name" placeholder="Imię i Nazwisko">
         <br>
         <label>
             <input type="checkbox" name="is_admin", value="true">
@@ -91,7 +133,7 @@
         Użytkownik:
         <select name="user_id">
             {% for user in users %}
-            <option value="{{ user.id }}">{{ user.imie_nazwisko }} ({{ user.name }})</option>
+            <option value="{{ user.id }}">{{ user.display_name }} ({{ user.name }})</option>
             {% endfor %}
         </select>
         <br>
