@@ -4,11 +4,15 @@
     <meta charset="UTF-8">
     <title>Logowanie do systemu drzwi</title>
     <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 
 <div>
     <h2>Zaloguj się:</h2>
+    TODO: SPRAWDZANIE HASŁA NIE DZIAłA
+    <span id="loginerror" style="color:red">Logowanie nie udało się!</span>
+    (TODO: TĄ WIADOMOŚĆ FAJNIE BY WŁĄCZAĆ I WYŁĄCZAĆ PO REFRESHU ZALEŻNIE CZY SIĘ UDAŁO CZY NIE ALE NIE WIEM JAK)
     <form action="/" method ="POST">
         <input type="text" name="login" placeholder="Login">
         <br>

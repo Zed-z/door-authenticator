@@ -22,11 +22,13 @@ errors = {
     "card_already_in_use":  ("Card already in use!",    431),
 }
 
+# Konfiguracja serwera
 class config(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_limit = db.Column(db.Integer)
     enforce_access_hours = db.Column(db.Integer)
 
+# Użytkownicy
 class users(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
@@ -50,7 +52,7 @@ def user_register(name, password, display_name, type, card_id):
 
 def user_login(name, password):
     user = users.query.filter(users.name == name).first()
-    print(user)
+    return (user)
     if user == None:
         return None
 
@@ -65,6 +67,7 @@ def password_hash(password, salt):
     bcrypt.hashpw(p, salt)
     return p.decode("utf-8")
 
+# Jednorazowe kody
 class access_codes(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
@@ -100,6 +103,7 @@ def generate_access_code(user, bind_user):
 
     return code
 
+# Logi administracyjne
 class logs(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
@@ -118,6 +122,7 @@ class logs(db.Model):
 
         return user.display_name +" "+  self.message + " at " + str( datetime.utcfromtimestamp(self.time_stamp))
 
+# Dopuszczalne godziny wstępu
 class access_hours(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
@@ -144,10 +149,23 @@ class access_hours(db.Model):
     def end_hour_formatted(self):
         return self.end_hour.strftime("%H:%M")
 
+# Obecność w pomieszczeniu
 class user_presence(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     time_stamp = db.Column(db.Integer) #unix timestamp
+
+    @property
+    def user_name(self):
+        user = users.query.filter(users.id == self.user_id).first()
+        if user == None:
+            return "<Nieznany użytkownik>"
+        return f"{user.display_name} ({user.name})"
+
+    @property
+    def date(self):
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.time_stamp))
+
 
 @app.route('/', methods=['GET','POST'])
 def root():
@@ -267,7 +285,9 @@ def admin():
             return "<h1>Something went wrong when adding user!</h1>"
 
     us = users.query.order_by(users.name).all()
-    return render_template('admin.html',users = us, code=code, bind_code=bind_code, admin=u, logs = logs.query.all(), access_hours=access_hours.query.all())
+    presences = user_presence.query.all()
+    conf = config.query.first()
+    return render_template('admin.html', users=us, presences=presences, config=conf, code=code, bind_code=bind_code, admin=u, logs = logs.query.all(), access_hours=access_hours.query.all())
 
 
 @app.route('/user', methods=['GET','POST'])
@@ -331,16 +351,17 @@ def handle_card(card_id):
         if type == 'entry':
 
             # Odnotuj próbę wejścia poza dopuszczalnymi godzinami, ale zawsze wpuść administratorów
-            if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
-                if user.type == 'N':
-                    log = logs(user_id=user.id, time_stamp=time.time(), message=" tried to enter outside hours")
-                    db.session.add(log)
-                    db.session.commit()
-                    return "Outside access hours!", 423
-                else:
-                    log = logs(user_id=user.id, time_stamp=time.time(), message=" entered outside hours")
-                    db.session.add(log)
-                    db.session.commit()
+            if config.query.first().enforce_access_hours:
+                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                    if user.type == 'N':
+                        log = logs(user_id=user.id, time_stamp=time.time(), message=" próbował wejść poza godzinami!")
+                        db.session.add(log)
+                        db.session.commit()
+                        return "Outside access hours!", 423
+                    else:
+                        log = logs(user_id=user.id, time_stamp=time.time(), message=" wszedł poza godzinami!")
+                        db.session.add(log)
+                        db.session.commit()
 
             # Nie wpuszczaj w przypadku osiągniętego limitu osób, ale zawsze wpuść administratorów
             if user_presence.query.filter(user_presence.user_id != user.id).count() >= config.query.first().user_limit:
@@ -355,10 +376,11 @@ def handle_card(card_id):
         elif type == 'exit':
 
             # Sprawdź czy użytkownik wyszedł poza dopuszczalnymi godzinami i ewentualnie odnotuj
-            if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
-                log = logs(user_id=user.id, time_stamp=time.time(), message=" wyszedł poza godzinami")
-                db.session.add(log)
-                db.session.commit()
+            if config.query.first().enforce_access_hours:
+                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                    log = logs(user_id=user.id, time_stamp=time.time(), message=" wyszedł poza godzinami!")
+                    db.session.add(log)
+                    db.session.commit()
 
             # Nie wypuszczaj w przypadku braku obecności w sali (podejrzana sytuacja), ale zawsze wypuść administratorów
             if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
