@@ -27,12 +27,33 @@ class config(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_limit = db.Column(db.Integer)
     enforce_access_hours = db.Column(db.Integer)
+    require_password = db.Column(db.Integer)
+
+@app.route('/config',methods=['GET','POST'])
+def configurate():
+
+   
+    if request.method == "POST":
+        configuration = config.query.first()
+
+        
+        configuration.require_password =  1 if request.form.get('require_password') else 0
+        
+        configuration.enforce_access_hours = 1 if request.form.get('enforce_access_hours') else 0
+        configuration.user_limit = request.form['user_limit']
+        db.session.commit()
+        
+        return redirect(url_for('admin'))
+        
+    else:
+        return "nie post"
+    
 
 # Użytkownicy
 class users(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
-    password_hash = db.Column(db.String(50), nullable=False)
+    password_hash = db.Column(db.String(100), nullable=False)
     password_salt = db.Column(db.String(50), nullable=False)
     display_name = db.Column(db.String(100),nullable=False)
     type = db.Column(db.String(1), nullable=False)
@@ -45,22 +66,29 @@ def user_register(name, password, display_name, type, card_id):
     salt = bcrypt.gensalt()
     passw = password_hash(password, salt)
 
-    db.session.add(users(name=name, password_hash=passw, password_salt=salt, display_name=display_name,  type=type, card_id=card_id))
+    user = users(name=name, password_hash=passw, password_salt=salt, display_name=display_name,  type=type, card_id=card_id)
+    db.session.add(user)
     db.session.commit()
 
     print(f"Registered user {name}")
+    return user
 
 def user_login(name, password):
     user = users.query.filter(users.name == name).first()
-    return (user)
+
+    confi =  config.query.first()
+    if not confi.require_password:
+        return (user)
+
+    
     if user == None:
         return None
 
-    print(password_hash(password, user.salt), user.password_hash)
-    if password_hash(password, user.salt) != user.password_hash:
+    print(password_hash(password, user.password_salt), user.password_hash)
+    if password_hash(password, user.password_salt) != user.password_hash:
         return None
 
-    return user
+    return (user)
 
 def password_hash(password, salt):
     p = password.encode("utf-8")
@@ -196,7 +224,8 @@ def root():
 
 
 
-        except:
+        except Exception as e:
+            print(e)
             resp = make_response("error")
             return resp
 
@@ -268,12 +297,13 @@ def admin():
         try:
             username = request.form['name']
             display_name = request.form['display_name']
+            password = request.form['passwd']
 
 
             user_type = "A" if request.form.get('is_admin') else "N"
-            user = users(name=username, type=user_type, display_name=display_name)
-            db.session.add(user)
-            db.session.commit()
+
+            
+            user = user_register(username,password,display_name,user_type,None)
 
 
 
@@ -281,7 +311,8 @@ def admin():
             db.session.add(log)
             db.session.commit()
 
-        except:
+        except Exception as e:
+            print(e)
             return "<h1>Something went wrong when adding user!</h1>"
 
     us = users.query.order_by(users.name).all()
@@ -519,10 +550,14 @@ def create_db():
     for i in range(2, 5+1):
         db.session.add(access_hours(user_id=3, week_day=i, start_hour=datetime.strptime("8:30", '%H:%M').time(), end_hour=datetime.strptime("12:00", '%H:%M').time()))
 
-    db.session.add(config(user_limit=2, enforce_access_hours=1))
+    db.session.add(config(user_limit=2, enforce_access_hours=1, require_password=1))
 
     db.session.commit()
     return redirect(url_for("root"))
+
+
+
+
 
 
 if __name__ == '__main__':

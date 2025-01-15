@@ -45,12 +45,14 @@
 <div>
     TODO: NIE DZIALA, NIE MA NIC OD STRONY SERWERA
     <h2>Konfiguracja:</h2>
-    <form action="/config">
+    <form action="/config" method="POST">
         Limit osób: <input type="number" name="user_limit" value="{{ config.user_limit }}">
         <br>
         <label>
             <input type="checkbox" name="enforce_access_hours" {% if config.enforce_access_hours == 1 %}checked{% endif %}>
-            Sprawdzaj godziny wejścia
+            Sprawdzaj godziny wejścia<br>
+            <input type="checkbox" name="require_password" {% if config.require_password == 1 %}checked{% endif %}>
+            Wymagaj hasła
         </label>
         <br>
         <input type="submit" value="Wprowadź zmiany"/>
@@ -100,6 +102,7 @@
             Uprawnienia administratora
         </label>
         <br>
+        <input type= "text" name="passwd" placeholder="haslo">
         <input type="submit" value="Zajerestruj">
 
     </form>
