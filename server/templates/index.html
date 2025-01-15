@@ -7,17 +7,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
+
+{% for category,alert in alerts %}
+<div class="alert-{{ category }}" onclick="this.style.display = 'none';">{{ alert }}</div>
+{% endfor %}
+
 <div class="center">
 
 <div class="container">
-    {% for alert in alerts %}
-        <div class="alert" onclick="document.getElementsByClassName('alert')[0].style.display = 'none';">{{ alert }}</div>
-    {% endfor %}
     <h2>Zaloguj się:</h2>
     <form action="/" method ="POST">
-        <input type="text" name="login" placeholder="Login">
+        <input type="text" name="login" placeholder="Nazwa Użytkownika" required>
         <br>
-        <input type="password" name="password" placeholder="Hasło">
+        <input type="password" name="password" placeholder="Hasło" required>
         <br>
         <input type="submit" value="Zaloguj się">
     </form>

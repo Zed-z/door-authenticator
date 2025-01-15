@@ -7,6 +7,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
+
+{% for category,alert in alerts %}
+<div class="alert-{{ category }}" onclick="this.style.display = 'none';">{{ alert }}</div>
+{% endfor %}
+
 <div class="center">
 
 <div class="container">
@@ -82,7 +87,7 @@
                 <td>{{ user.card_id }}</td>
                 <td>
                     {% if user.type != 'A' %}
-                    <form action="/delete/{{user.id}}">
+                    <form action="/userdelete/{{user.id}}">
                         <input type="submit" value="Usuń"/>
                     </form>
                     {% else %}
@@ -94,18 +99,19 @@
     </table>
 
     <h3>Zarejestruj użytkownika:</h3>
-    <form action="/admin" method ="POST">
+    <form action="/useradd" method ="POST">
 
-        <input type= "text" name="name" placeholder="Nazwa Użytkownika">
+        <input type= "text" name="name" placeholder="Nazwa Użytkownika" required>
         <br>
-        <input type= "text" name="display_name" placeholder="Imię i Nazwisko">
+        <input type= "text" name="display_name" placeholder="Imię i Nazwisko" required>
+        <br>
+        <input type= "password" name="passwd" placeholder="Hasło" required>
         <br>
         <label>
             <input type="checkbox" name="is_admin", value="true">
             Uprawnienia administratora
         </label>
         <br>
-        <input type= "text" name="passwd" placeholder="haslo">
         <input type="submit" value="Zajerestruj">
 
     </form>

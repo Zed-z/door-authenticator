@@ -1,3 +1,4 @@
+#region Moduły
 from flask import Flask,render_template,request,redirect,url_for,make_response,flash,get_flashed_messages
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
@@ -7,6 +8,7 @@ import time
 import bcrypt
 
 from datetime import datetime
+#endregion
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
@@ -14,14 +16,18 @@ app.secret_key = '!@#$%^&*()!@#$%^&*()!@#$%^&*()'
 
 db = SQLAlchemy(app)
 
+# Komunikaty z błędami
 errors = {
-    "post_only":            ("POST request only!",      400),
-    "admin_only":           ("Admin access only!",      499),
-    "unknown_error":        ("Unknown error occured!",  400),
-    "invalid_card":         ("Invalid card!",           420),
-    "user_limit_reached":   ("User limit reached!",     421),
-    "user_not_in_room":     ("User not in room!",       422),
-    "card_already_in_use":  ("Card already in use!",    431),
+    "post_only":            ("Ten adres przyjmuje tylko POST!",     400),
+    "admin_only":           ("Dostęp tylko dla administratorów!",   499),
+    "unknown_error":        ("Nieznany błąd!",                      400),
+    "invalid_card":         ("Niepoprawna karta!",                  420),
+    "invalid_card":         ("Niepoprawny kod!",                    420),
+    "user_limit_reached":   ("Limit użytkowników osiągnięty!",      421),
+    "user_not_in_room":     ("Użytkownik nie jest w środku!",       422),
+    "card_already_in_use":  ("Karta w użyciu przez kogoś innego!",  431),
+    "noone_to_bind":        ("Nie podano użytkownika!",             400),
+    "user_doesnt_exist":    ("Nie ma takiego użytkownika!",         400)
 }
 
 # Konfiguracja serwera
@@ -223,10 +229,10 @@ def root():
 
         except Exception as e:
             print(e)
-            flash('Niepowodzenie logowania!')
+            flash('Niepowodzenie logowania!', "error")
             return redirect(url_for("root"))
 
-    alerts = get_flashed_messages()
+    alerts = get_flashed_messages(with_categories=True)
     return render_template('index.html', alerts=alerts)
 
 
@@ -237,13 +243,14 @@ def permsadd():
         u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
         assert(u != None)
     except:
-        return "Brak uprawnień administratora!"
+        return errors["admin_only"]
 
     try:
         start_hour = datetime.strptime(request.form["start_hour"], '%H:%M').time()
         end_hour = datetime.strptime(request.form["end_hour"], '%H:%M').time()
         if start_hour >= end_hour:
-            return "Niewłaściwy przedział czasu!"
+            flash("Niewłaściwy przedział czasu!", "error")
+            return redirect(url_for("admin"))
 
         ah = access_hours(user_id=request.form["user_id"], week_day=request.form["week_day"], start_hour=start_hour, end_hour=end_hour)
         db.session.add(ah)
@@ -251,10 +258,13 @@ def permsadd():
         log = logs(user_id=u.id, time_stamp=time.time(), message="added permission " + str(ah.id))
         db.session.add(log)
         db.session.commit()
-    except:
-        return "Błąd podczas dodawania praw dostępu!"
 
-    return redirect(url_for("admin"))
+        flash("Nadano uprawnienia.", "info")
+        return redirect(url_for("admin"))
+
+    except:
+        flash("Nie udało się nadać uprawnień!", "error")
+        return redirect(url_for("admin"))
 
 @app.route('/permsdelete/<int:id>', methods=['POST', 'GET'])
 def permsdelete(id):
@@ -272,11 +282,14 @@ def permsdelete(id):
         log = logs(user_id=u.id, time_stamp=time.time(), message="deleted permission " + str(id))
         db.session.add(log)
         db.session.commit()
+
+        flash("Odebrano uprawnienia.", "info")
+        return redirect(url_for("admin"))
+
     except Exception as e:
         print(repr(e))
-        return "<h1>Something went wrong when deleting permission!</h1>"
-
-    return redirect(url_for("admin"))
+        flash("Nie udało się odebrać uprawnień!", "error")
+        return redirect(url_for("admin"))
 
 @app.route('/admin', methods=['GET','POST'])
 def admin():
@@ -289,34 +302,12 @@ def admin():
         print(repr(e))
         return errors["admin_only"]
 
-
-    if request.method == 'POST':
-
-        try:
-            username = request.form['name']
-            display_name = request.form['display_name']
-            password = request.form['passwd']
-
-
-            user_type = "A" if request.form.get('is_admin') else "N"
-
-            
-            user = user_register(username,password,display_name,user_type,None)
-
-
-
-            log = logs(user_id=users.query.filter(users.name == request.cookies.get('login')).first().id, time_stamp=time.time(), message="added user " + user.display_name)
-            db.session.add(log)
-            db.session.commit()
-
-        except Exception as e:
-            print(e)
-            return "<h1>Something went wrong when adding user!</h1>"
-
     us = users.query.order_by(users.name).all()
     presences = user_presence.query.all()
     conf = config.query.first()
-    return render_template('admin.html', users=us, presences=presences, config=conf, code=code, bind_code=bind_code, admin=u, logs = logs.query.all(), access_hours=access_hours.query.all())
+
+    alerts = get_flashed_messages(with_categories=True)
+    return render_template('admin.html', alerts=alerts, users=us, presences=presences, config=conf, code=code, bind_code=bind_code, admin=u, logs = logs.query.all(), access_hours=access_hours.query.all())
 
 
 @app.route('/user', methods=['GET','POST'])
@@ -335,11 +326,37 @@ def user():
 
     hours = access_hours.query.filter(access_hours.user_id == user.id).all()
 
-    return render_template('user.html', user=user, code=code, bind_code=bind_code, logs = user_logs, access_hours=hours)
+    alerts = get_flashed_messages(with_categories=True)
+    return render_template('user.html', alerts=alerts, user=user, code=code, bind_code=bind_code, logs = user_logs, access_hours=hours)
 
 
-@app.route("/delete/<int:idtifier>",methods=['POST','GET'])
-def delete(idtifier):
+@app.route("/useradd",methods=['POST'])
+def useradd():
+    if request.method != "POST":
+        return errors["post_only"]
+
+    try:
+        username = request.form['name']
+        display_name = request.form['display_name']
+        password = request.form['passwd']
+
+        user_type = "A" if request.form.get('is_admin') else "N"
+        user = user_register(username,password,display_name,user_type,None)
+
+        log = logs(user_id=users.query.filter(users.name == request.cookies.get('login')).first().id, time_stamp=time.time(), message="added user " + user.display_name)
+        db.session.add(log)
+        db.session.commit()
+
+        flash("Dodano pracownika.", "info")
+        return redirect(url_for("admin"))
+
+    except Exception as e:
+        print(e)
+        flash("Nie udało się dodać pracownika!", "error")
+        return redirect(url_for("admin"))
+
+@app.route("/userdelete/<int:idtifier>",methods=['POST','GET'])
+def userdelete(idtifier):
     try:
         print(request.cookies.get('login'))
         u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
@@ -354,13 +371,18 @@ def delete(idtifier):
         db.session.add(log)
         db.session.commit()
 
+        flash("Usunięto pracownika.", "info")
         return redirect(url_for("admin"))
-    except:
-        return "<h1>Something went wrong when deleting user!</h1>"
+
+    except Exception as e:
+        print(e)
+        flash("Nie udało się usunąć pracownika!", "error")
+        return redirect(url_for("admin"))
 
 
+#region Obsługa terminala ----------------------------------------------------------------------------------------------
 
-
+# Uwierzytelnianie za pomocą karty
 @app.route("/card/<string:card_id>",methods=['POST','GET'])
 def handle_card(card_id):
 
@@ -429,100 +451,123 @@ def handle_card(card_id):
         return errors["unknown_error"]
 
 
-@app.route("/card_bind/<string:card_id>",methods=['POST','GET'])
-def handle_card_bind(card_id):
-
-    try:
-        if request.cookies.get('bind_user') != None:
-
-            # Quit if card used
-            if users.query.filter(users.card_id == card_id).first() != None:
-                return errors["card_already_in_use"]
-
-            bind_user_id = int(request.cookies.get('bind_user'))
-            print("Binding user", bind_user_id, "to card", card_id)
-
-            user_q = users.query.filter(users.id == bind_user_id)
-            user = user_q.first()
-            if user is not None:
-
-                user_q.update({ "card_id": card_id })
-                db.session.commit()
-
-                resp = make_response(user.display_name, 200)
-                log = logs(user_id=user.id, time_stamp=time.time(), message="has been binded to card" + str(card_id))
-                db.session.add(log)
-                db.session.commit()
-
-                resp.set_cookie("bind_user", "", expires=0)
-
-                return resp
-            else:
-                return "there is no user in the database", 400
-        else:
-            return "No user to bind!",400
-    except:
-        return errors["unknown_error"]
-
-
+# Uwierzytelnianie za pomocą kodu jednorazowego
 @app.route("/code/<string:code>",methods=['POST','GET'])
 def handle_code(code):
     type = request.args.get('type', "entry") # entry / exit
 
     try:
+        # Wyczyść przestarzałe kody
         access_codes.query.filter(access_codes.expires < time.time()).delete()
         db.session.commit()
 
+        # Wyszukaj kod
         code_q = access_codes.query.filter(access_codes.code == code)
         code = code_q.first()
 
+        # Error jeśli kod nie istnieje
         if code is None:
-            return "Invalid code!",400
+            return errors["invalid_code"]
 
+        # Wyszukaj dane na bazie kodu
         user = users.query.filter(users.id == code.user_id).first()
-
         bind_user = code.bind_user
 
+        # Usuń wykorzystany kod
         code_q.delete()
         db.session.commit()
 
+        # Error jeśli taki użytkownik nie istnieje
         if user is None:
-            return "No such user exists!",400
+            return errors["user_doesnt_exist"]
 
+        # Wejście
         if type == 'entry':
 
+            # Nie wpuszczaj w przypadku osiągniętego limitu osób, ale zawsze wpuść administratorów
             if user_presence.query.filter(user_presence.user_id != user.id).count() >= config.query.first().user_limit:
                 if user.type == 'N':
                     return errors["user_limit_reached"]
 
+            # Dodaj wpis o obecności użytkownika
             db.session.add(user_presence(user_id=user.id, time_stamp=time.time()))
             db.session.commit()
 
+        # Wyjście
         elif type == 'exit':
 
+            # Nie wypuszczaj w przypadku braku obecności w sali (podejrzana sytuacja), ale zawsze wypuść administratorów
             if user_presence.query.filter(user_presence.user_id == user.id).count() == 0:
                 if user.type == 'N':
                     return errors["user_not_in_room"]
 
+            # Usuń wpis o obecności użytkownika
             user_presence.query.filter(user_presence.user_id == user.id).delete()
             db.session.commit()
 
+        # Utwórz odpowiedź zwrotną
         resp = make_response(user.display_name, 200)
 
-        # Start bind process
+        # Rozpocznij procedurę przypisywania karty
+        # Prześlij informację do terminala za pomocą ciassteczka
         if bind_user == "Y":
             resp.set_cookie("bind_user", str(user.id), max_age=30)
 
-        log = logs(user_id=user.id, time_stamp=time.time(), message="has used code" + str(code))
+        # Odnotuj zdarzenie
+        log = logs(user_id=user.id, time_stamp=time.time(), message=" użył kodu " + str(code))
         db.session.add(log)
         db.session.commit()
+
         return resp
 
     except Exception as e:
-        print(e)
+        repr(e)
         return errors["unknown_error"]
 
 
+# Przypisanie karty do danego użytkownika
+@app.route("/card_bind/<string:card_id>",methods=['POST','GET'])
+def handle_card_bind(card_id):
+    try:
+        # Ciasteczko z ID użytkownika do przypisania
+        bind_user = request.cookies.get('bind_user')
+
+        # Error jeśli nie podano użytkownika
+        if bind_user == None:
+            return errors["noone_to_bind"]
+
+        # Quit if card used
+        if users.query.filter(users.card_id == card_id).first() != None:
+            return errors["card_already_in_use"]
+
+        bind_user_id = int(bind_user)
+        print("Binding user", bind_user_id, "to card", card_id)
+
+        user_q = users.query.filter(users.id == bind_user_id)
+        user = user_q.first()
+        if user is None:
+            return errors["user_doesnt_exist"]
+
+        user_q.update({ "card_id": card_id })
+        db.session.commit()
+
+        resp = make_response(user.display_name, 200)
+        log = logs(user_id=user.id, time_stamp=time.time(), message=" przypisał kartę " + str(card_id))
+        db.session.add(log)
+        db.session.commit()
+
+        resp.set_cookie("bind_user", "", expires=0)
+
+        return resp
+
+    except Exception as e:
+        repr(e)
+        return errors["unknown_error"]
+
+#endregion -------------------------------------------------------------------------------------------------------------
+
+
+# Wylogowanie się
 @app.route("/logout", methods=['POST','GET'])
 def logout():
     resp = redirect(url_for("root"))
@@ -530,34 +575,35 @@ def logout():
     return resp
 
 
+# Jednorazowe przygotowanie bazy danych
 @app.route('/createdb')
 def create_db():
-    # Only run once
+    # Zapewnienie jednorazowego uruchomienia
     if config.query.count() > 0:
         return redirect(url_for("root"))
 
     db.create_all()
 
+    # Przykładowi użytkownicy
     user_register(name="admin", password="123", display_name="Adam Miński", type="A", card_id="713165701200")
     user_register(name="user1", password="123", display_name="Jan Kod",     type="N", card_id="84928037837")
     user_register(name="user2", password="123", display_name="Anna Karta",  type="N", card_id="728048272166")
 
+    # Przykładowe uprawnienia
     for i in range(1, 5+1):
         db.session.add(access_hours(user_id=2, week_day=i, start_hour=datetime.strptime("9:00", '%H:%M').time(), end_hour=datetime.strptime("17:00", '%H:%M').time()))
 
     for i in range(2, 5+1):
         db.session.add(access_hours(user_id=3, week_day=i, start_hour=datetime.strptime("8:30", '%H:%M').time(), end_hour=datetime.strptime("12:00", '%H:%M').time()))
 
+    # Początkowa konfiguracja
     db.session.add(config(user_limit=2, enforce_access_hours=1, require_password=1))
 
     db.session.commit()
     return redirect(url_for("root"))
 
 
-
-
-
-
+# Inicjalizacja serwera
 if __name__ == '__main__':
     print("Setting up...")
 
@@ -565,7 +611,7 @@ if __name__ == '__main__':
         db.create_all()
         db.session.commit()
 
-        # Clear possible leftover user presences
+        # Wyczyszczenie obecności w pomieszczeniu
         user_presence.query.delete()
         db.session.commit()
 
