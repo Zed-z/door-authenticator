@@ -4,12 +4,6 @@ body {
 * {
 	font-family: sans-serif;
 }
-div {
-	margin: 1em;
-	padding: 1em;
-	background-color: silver;
-	border-radius: 1em;
-}
 
 .username {
 	color: #207cb9;
@@ -44,7 +38,19 @@ input[type=text], input[type=password], input[type=time], select {
 	margin: 0.25em;
 }
 
+.container {
+	margin: 1em;
+	padding: 1em;
+	background-color: silver;
+	border-radius: 1em;
+}
 
+.center {
+	min-width: 50%;
+	max-width: fit-content;
+	margin-left: auto;
+	margin-right: auto;
+}
 
 th, td {
 	padding: 0.75em;
@@ -58,4 +64,21 @@ th:not(:first-child) {
 }
 tr:nth-child(even) {
 	background-color: #f2f2f2;
+}
+
+
+.alert {
+	margin: 1em;
+	padding: 1em;
+	border-radius: 1em;
+	background-color: rgba(255, 50, 28, 0.815);
+	border: 2px solid red;
+	color: white;
+	font-weight: bold;
+
+	filter: drop-shadow(0 0 0.25em black);
+
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
 }

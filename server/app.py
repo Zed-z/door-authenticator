@@ -1,4 +1,4 @@
-from flask import Flask,render_template,request,redirect,url_for,make_response
+from flask import Flask,render_template,request,redirect,url_for,make_response,flash,get_flashed_messages
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 
@@ -10,10 +10,12 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+app.secret_key = '!@#$%^&*()!@#$%^&*()!@#$%^&*()'
 
 db = SQLAlchemy(app)
 
 errors = {
+    "post_only":            ("POST request only!",      400),
     "admin_only":           ("Admin access only!",      499),
     "unknown_error":        ("Unknown error occured!",  400),
     "invalid_card":         ("Invalid card!",           420),
@@ -30,24 +32,19 @@ class config(db.Model):
     require_password = db.Column(db.Integer)
 
 @app.route('/config',methods=['GET','POST'])
-def configurate():
+def configure():
+    if request.method != "POST":
+        return errors["post_only"]
 
-   
-    if request.method == "POST":
-        configuration = config.query.first()
+    configuration = config.query.first()
 
-        
-        configuration.require_password =  1 if request.form.get('require_password') else 0
-        
-        configuration.enforce_access_hours = 1 if request.form.get('enforce_access_hours') else 0
-        configuration.user_limit = request.form['user_limit']
-        db.session.commit()
-        
-        return redirect(url_for('admin'))
-        
-    else:
-        return "nie post"
-    
+    configuration.require_password =  1 if request.form.get('require_password') else 0
+
+    configuration.enforce_access_hours = 1 if request.form.get('enforce_access_hours') else 0
+    configuration.user_limit = request.form['user_limit']
+    db.session.commit()
+
+    return redirect(url_for('admin'))
 
 # Użytkownicy
 class users(db.Model):
@@ -226,10 +223,11 @@ def root():
 
         except Exception as e:
             print(e)
-            resp = make_response("error")
-            return resp
+            flash('Niepowodzenie logowania!')
+            return redirect(url_for("root"))
 
-    return render_template('index.html')
+    alerts = get_flashed_messages()
+    return render_template('index.html', alerts=alerts)
 
 
 @app.route('/permsadd', methods=['POST'])

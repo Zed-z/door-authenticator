@@ -7,22 +7,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
+<div class="center">
 
-<div>
+<div class="container">
     <h1>Witaj, <span class="username">{{ admin.display_name }}</span>!</h1>
     <form action="/logout">
         <input type="submit" value="Wyloguj się"/>
     </form>
 </div>
 
-<div>
-    <h1>Kod jednorazowy: <em>{{ code }}</em>!</h1>
+<div class="container">
+    <h1>Kod jednorazowy: <em>{{ code }}</em></h1>
     {% if bind_code is not none %}
-        <h1>Kod rejestracji karty: <em>{{ bind_code }}</em>!</h1>
+        <h1>Kod rejestracji karty: <em>{{ bind_code }}</em></h1>
     {% endif %}
 </div>
 
-<div>
+<div class="container">
     <h2>Aktualnie w pomieszczeniu:</h2>
     <table>
         <tr>
@@ -42,15 +43,17 @@
     </table>
 </div>
 
-<div>
-    TODO: NIE DZIALA, NIE MA NIC OD STRONY SERWERA
+<div class="container">
     <h2>Konfiguracja:</h2>
     <form action="/config" method="POST">
         Limit osób: <input type="number" name="user_limit" value="{{ config.user_limit }}">
         <br>
         <label>
             <input type="checkbox" name="enforce_access_hours" {% if config.enforce_access_hours == 1 %}checked{% endif %}>
-            Sprawdzaj godziny wejścia<br>
+            Sprawdzaj godziny wejścia
+        </label>
+        <br>
+        <label>
             <input type="checkbox" name="require_password" {% if config.require_password == 1 %}checked{% endif %}>
             Wymagaj hasła
         </label>
@@ -59,7 +62,7 @@
     </form>
 </div>
 
-<div>
+<div class="container">
     <h2>Użytkownicy:</h2>
     <table>
         <tr>
@@ -108,7 +111,7 @@
     </form>
 </div>
 
-<div>
+<div class="container">
     <h2>Prawa dostępu:</h2>
     <table>
         <tr>
@@ -159,7 +162,7 @@
     </form>
 </div>
 
-<div>
+<div class="container">
     <h2>Log aktywności:</h2>
     <table>
         <tr>
@@ -175,5 +178,6 @@
     </table>
 </div>
 
+</div>
 </body>
 </html>

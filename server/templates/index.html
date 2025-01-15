@@ -7,12 +7,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
+<div class="center">
 
-<div>
+<div class="container">
+    {% for alert in alerts %}
+        <div class="alert" onclick="document.getElementsByClassName('alert')[0].style.display = 'none';">{{ alert }}</div>
+    {% endfor %}
     <h2>Zaloguj się:</h2>
-    TODO: SPRAWDZANIE HASŁA NIE DZIAłA
-    <span id="loginerror" style="color:red">Logowanie nie udało się!</span>
-    (TODO: TĄ WIADOMOŚĆ FAJNIE BY WŁĄCZAĆ I WYŁĄCZAĆ PO REFRESHU ZALEŻNIE CZY SIĘ UDAŁO CZY NIE ALE NIE WIEM JAK)
     <form action="/" method ="POST">
         <input type="text" name="login" placeholder="Login">
         <br>
@@ -23,5 +24,6 @@
     <p>Nie posiadasz konta w systemie? Poproś administratora o utworzenie go.</p>
 </div>
 
+</div>
 </body>
 </html>
