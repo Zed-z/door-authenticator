@@ -535,6 +535,10 @@ def handle_card(card_id):
         # Wejście
         if type == 'entry':
 
+            # Wyczyść obecność w sali (w razie wcześniejszego odblokowania ale nie wejścia)
+            user_presence.query.filter(user_presence.user_id == user.id).delete()
+            db.session.commit()
+
             # Odnotuj próbę wejścia poza dopuszczalnymi godzinami, ale zawsze wpuść administratorów
             if config.query.first().enforce_access_hours:
                 if not check_access_hours(user, now):
@@ -618,6 +622,10 @@ def handle_code(code):
 
         # Wejście
         if type == 'entry':
+
+            # Wyczyść obecność w sali (w razie wcześniejszego odblokowania ale nie wejścia)
+            user_presence.query.filter(user_presence.user_id == user.id).delete()
+            db.session.commit()
 
             # Nie wpuszczaj w przypadku osiągniętego limitu osób, ale zawsze wpuść administratorów
             if user_presence.query.filter(user_presence.user_id != user.id).count() >= config.query.first().user_limit:
