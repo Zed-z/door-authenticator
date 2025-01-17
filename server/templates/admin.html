@@ -51,7 +51,9 @@
 <div class="container">
     <h2>Konfiguracja:</h2>
     <form action="/config" method="POST">
-        Limit osób: <input type="number" name="user_limit" value="{{ config.user_limit }}">
+        Limit osób: <input type="number" name="user_limit" value="{{ config.user_limit }}" min="1">
+        <br>
+        Czas kodów jednorazowych: <input type="number" name="code_lifetime" value="{{ config.code_lifetime }}" min="1"> s
         <br>
         <label>
             <input type="checkbox" name="enforce_access_hours" {% if config.enforce_access_hours == 1 %}checked{% endif %}>

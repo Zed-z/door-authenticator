@@ -38,9 +38,10 @@ db = SQLAlchemy(app)
 # Konfiguracja serwera
 class config(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_limit = db.Column(db.Integer)
-    enforce_access_hours = db.Column(db.Integer)
-    require_password = db.Column(db.Integer)
+    user_limit = db.Column(db.Integer) # Limit użytkowników w pomieszczeniu
+    enforce_access_hours = db.Column(db.Integer) # Czy pilnować godzin wstępu
+    require_password = db.Column(db.Integer) # Czy wymagać haseł do logowania
+    code_lifetime = db.Column(db.Integer) # Czas wygasania kodów jednorazowych
 
 # Użytkownicy
 class users(db.Model):
@@ -119,8 +120,11 @@ def generate_access_code(user, bind_user):
         if len(duplicates) == 0:
             break
 
+    # Odszukaj konfigurację
+    conf = config.query.first()
+
     # Ustawienie czasu wygaśnięcia kodu
-    expires = time.time() + 120
+    expires = time.time() + conf.code_lifetime
 
     # Ustawienie trybu przypisania kodu
     bind_user_bool = "Y" if bind_user else "N"
@@ -347,6 +351,7 @@ def configure():
     configuration.require_password =  1 if request.form.get('require_password') else 0
     configuration.enforce_access_hours = 1 if request.form.get('enforce_access_hours') else 0
     configuration.user_limit = request.form['user_limit']
+    configuration.code_lifetime = request.form['code_lifetime']
     db.session.commit()
 
     return redirect(url_for('admin'))
@@ -727,7 +732,7 @@ def create_db():
         db.session.add(access_hours(user_id=3, week_day=i, start_hour=datetime.strptime("8:30", '%H:%M').time(), end_hour=datetime.strptime("12:00", '%H:%M').time()))
 
     # Początkowa konfiguracja
-    db.session.add(config(user_limit=2, enforce_access_hours=1, require_password=1))
+    db.session.add(config(user_limit=2, enforce_access_hours=1, require_password=1, code_lifetime=120))
 
     db.session.commit()
     return redirect(url_for("root"))
