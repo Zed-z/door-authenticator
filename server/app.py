@@ -177,6 +177,15 @@ class access_hours(db.Model):
     def end_hour_formatted(self):
         return self.end_hour.strftime("%H:%M")
 
+# Funkcja sprawdzająca, czy w danym momencie użytkownik ma prawo dostępu
+def check_access_hours(user, now):
+    hours = access_hours.query.filter(access_hours.user_id == user.id)\
+        .filter(access_hours.week_day == now.weekday() + 1)\
+        .filter(access_hours.start_hour <= now.time())\
+        .filter(access_hours.end_hour >= now.time())\
+        .count()
+    return hours > 0
+
 # Obecność w pomieszczeniu
 class user_presence(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -511,7 +520,7 @@ def handle_card(card_id):
 
             # Odnotuj próbę wejścia poza dopuszczalnymi godzinami, ale zawsze wpuść administratorów
             if config.query.first().enforce_access_hours:
-                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                if not check_access_hours(user, now):
                     if user.type == 'N':
                         log = logs(user_id=user.id, time_stamp=time.time(), message=" próbował wejść poza godzinami!")
                         db.session.add(log)
@@ -541,7 +550,7 @@ def handle_card(card_id):
 
             # Sprawdź czy użytkownik wyszedł poza dopuszczalnymi godzinami i ewentualnie odnotuj
             if config.query.first().enforce_access_hours:
-                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                if not check_access_hours(user, now):
                     log = logs(user_id=user.id, time_stamp=time.time(), message=" wyszedł poza godzinami!")
                     db.session.add(log)
                     db.session.commit()
@@ -600,7 +609,7 @@ def handle_code(code):
 
             # Odnotuj próbę wejścia poza dopuszczalnymi godzinami, ale zawsze wpuść administratorów
             if config.query.first().enforce_access_hours:
-                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                if not check_access_hours(user, now):
                     if user.type == 'N':
                         log = logs(user_id=user.id, time_stamp=time.time(), message=" próbował wejść poza godzinami!")
                         db.session.add(log)
@@ -625,7 +634,7 @@ def handle_code(code):
 
             # Sprawdź czy użytkownik wyszedł poza dopuszczalnymi godzinami i ewentualnie odnotuj
             if config.query.first().enforce_access_hours:
-                if access_hours.query.filter(access_hours.week_day == now.weekday() + 1).count() == 0:
+                if not check_access_hours(user, now):
                     log = logs(user_id=user.id, time_stamp=time.time(), message=" wyszedł poza godzinami!")
                     db.session.add(log)
                     db.session.commit()

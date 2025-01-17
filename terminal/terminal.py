@@ -14,7 +14,7 @@ class Config():
 	def __init__(self, lang):
 		self.server_ip = "http://localhost:5000"
 		self.inactivity_timeout = 5
-		self.buzzer_mute = True
+		self.buzzer_mute = False
 
 		self.lang_pl = {
 			"welcome_1":				"--System Drzwi--",
