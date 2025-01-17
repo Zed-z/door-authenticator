@@ -57,6 +57,11 @@
     <form action="/config" method="POST">
         Limit osób: <input type="number" name="user_limit" value="{{ config.user_limit }}" min="1">
         <br>
+        <label>
+            <input type="checkbox" name="generate_codes" {% if config.generate_codes == 1 %}checked{% endif %}>
+            Generuj kody jednorazowe
+        </label>
+        <br>
         Czas kodów jednorazowych: <input type="number" name="code_lifetime" value="{{ config.code_lifetime }}" min="1"> s
         <br>
         <label>

@@ -41,6 +41,7 @@ class config(db.Model):
     user_limit = db.Column(db.Integer) # Limit użytkowników w pomieszczeniu
     enforce_access_hours = db.Column(db.Integer) # Czy pilnować godzin wstępu
     require_password = db.Column(db.Integer) # Czy wymagać haseł do logowania
+    generate_codes = db.Column(db.Integer) # Czy generować kody jednorazowe do logowania
     code_lifetime = db.Column(db.Integer) # Czas wygasania kodów jednorazowych
 
 # Użytkownicy
@@ -264,8 +265,11 @@ def admin():
         u = users.query.filter(users.name == request.cookies.get('login')).filter(users.type == "A").first()
         assert(u != None)
 
+        # Znajdź konfigurację
+        conf = config.query.first()
+
         # Wygeneruj kody jednorazowe
-        code = generate_access_code(u, u.card_id == None)
+        code = generate_access_code(u, u.card_id == None) if conf.generate_codes else None
         bind_code = generate_access_code(u, True) if u.card_id == None else None
 
     except Exception as e:
@@ -275,7 +279,6 @@ def admin():
     # Wyszukaj potrzebne administratorowi dane
     us = users.query.order_by(users.name).all()
     presences = user_presence.query.all()
-    conf = config.query.first()
     alerts = get_flashed_messages(with_categories=True)
 
     return render_template('admin.html',
@@ -300,8 +303,11 @@ def user():
         user = users.query.filter(users.name == request.cookies.get('login')).first()
         assert(user != None)
 
+        # Znajdź konfigurację
+        conf = config.query.first()
+
         # Wygeneruj kody jednorazowe
-        code = generate_access_code(user, False)
+        code = generate_access_code(user, False) if conf.generate_codes else None
         bind_code = generate_access_code(user, True) if user.card_id == None else None
 
     except Exception as e:
@@ -312,7 +318,6 @@ def user():
     user_logs = logs.query.filter(logs.user_id == user.id).all()
     hours = access_hours.query.filter(access_hours.user_id == user.id).all()
     alerts = get_flashed_messages(with_categories=True)
-    conf = config.query.first()
 
     return render_template('user.html',
         alerts=alerts,
@@ -357,6 +362,7 @@ def configure():
     configuration.enforce_access_hours = 1 if request.form.get('enforce_access_hours') else 0
     configuration.user_limit = request.form['user_limit']
     configuration.code_lifetime = request.form['code_lifetime']
+    configuration.generate_codes = 1 if request.form.get('generate_codes') else 0
     db.session.commit()
 
     flash("Zmieniono konfigurację.", "info")
@@ -689,6 +695,7 @@ def handle_card_bind(card_id):
         if users.query.filter(users.card_id == card_id).first() != None:
             return errors["card_already_in_use"]
 
+        # Znajdź użytkownika do przypisania
         bind_user_id = int(bind_user)
         print("Binding user", bind_user_id, "to card", card_id)
 
@@ -697,9 +704,11 @@ def handle_card_bind(card_id):
         if user is None:
             return errors["user_doesnt_exist"]
 
+        # Przypisz kartę
         user_q.update({ "card_id": card_id })
         db.session.commit()
 
+        # Utwórz odpowiedź
         resp = make_response(user.display_name, 200)
         log = logs(user_id=user.id, time_stamp=time.time(), message=" przypisał kartę " + str(card_id))
         db.session.add(log)
@@ -738,7 +747,7 @@ def create_db():
         db.session.add(access_hours(user_id=3, week_day=i, start_hour=datetime.strptime("8:30", '%H:%M').time(), end_hour=datetime.strptime("12:00", '%H:%M').time()))
 
     # Początkowa konfiguracja
-    db.session.add(config(user_limit=2, enforce_access_hours=1, require_password=1, code_lifetime=120))
+    db.session.add(config(user_limit=2, enforce_access_hours=1, require_password=1, code_lifetime=120, generate_codes=1))
 
     db.session.commit()
     return redirect(url_for("root"))
