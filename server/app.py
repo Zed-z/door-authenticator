@@ -10,7 +10,7 @@ import bcrypt
 from datetime import datetime
 #endregion
 
-
+# Utworzenie obiektu flask
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.secret_key = '!@#$%^&*()!@#$%^&*()!@#$%^&*()'
@@ -674,7 +674,7 @@ def handle_card_bind(card_id):
         if bind_user == None:
             return errors["noone_to_bind"]
 
-        # Quit if card used
+        # Error jeśli karta jest już w użyciu
         if users.query.filter(users.card_id == card_id).first() != None:
             return errors["card_already_in_use"]
 
