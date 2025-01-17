@@ -249,8 +249,11 @@ def root():
             flash('Niepowodzenie logowania!', "error")
             return redirect(url_for("root"))
 
+    # Wyszukaj konfigurację
+    conf = config.query.first()
+
     alerts = get_flashed_messages(with_categories=True)
-    return render_template('index.html', alerts=alerts)
+    return render_template('index.html', alerts=alerts, config=conf)
 
 
 # Strona administratora
@@ -309,6 +312,7 @@ def user():
     user_logs = logs.query.filter(logs.user_id == user.id).all()
     hours = access_hours.query.filter(access_hours.user_id == user.id).all()
     alerts = get_flashed_messages(with_categories=True)
+    conf = config.query.first()
 
     return render_template('user.html',
         alerts=alerts,
@@ -316,7 +320,8 @@ def user():
         code=code,
         bind_code=bind_code,
         logs=user_logs,
-        access_hours=hours
+        access_hours=hours,
+        config=conf
     )
 
 
@@ -354,6 +359,7 @@ def configure():
     configuration.code_lifetime = request.form['code_lifetime']
     db.session.commit()
 
+    flash("Zmieniono konfigurację.", "info")
     return redirect(url_for('admin'))
 
 

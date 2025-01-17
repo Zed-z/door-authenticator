@@ -21,12 +21,16 @@
     </form>
 </div>
 
+{% if code is not none or bind_code is not none %}
 <div class="container">
+    {% if code is not none %}
     <h1>Kod jednorazowy: <em>{{ code }}</em></h1>
+    {% endif %}
     {% if bind_code is not none %}
         <h1>Kod rejestracji karty: <em>{{ bind_code }}</em></h1>
     {% endif %}
 </div>
+{% endif %}
 
 <div class="container">
     <h2>Prawa dostępu:</h2>
@@ -35,12 +39,16 @@
             <th>Dzień tygodnia</th>
             <th>Godziny</th>
         </tr>
-        {% for ah in access_hours %}
+        {% if access_hours %}
+            {% for ah in access_hours %}
             <tr>
                 <td>{{ ah.week_day_name }}</td>
                 <td>{{ ah.start_hour_formatted }} - {{ ah.end_hour_formatted }}</td>
             </tr>
-        {% endfor %}
+            {% endfor %}
+        {% else %}
+            <tr><td>(brak)</td><td></td></tr>
+        {% endif %}
     </table>
 </div>
 
@@ -50,13 +58,17 @@
         <tr>
             <th>Log</th>
         </tr>
-        {% for log in logs %}
-        <tr>
-            <td>
-                {{ log }}
-            </td>
-        </tr>
-        {% endfor %}
+        {% if logs %}
+            {% for log in logs %}
+            <tr>
+                <td>
+                    {{ log }}
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr><td>(brak)</td></tr>
+        {% endif %}
     </table>
 </div>
 
