@@ -2,6 +2,7 @@
 from flask import Flask,render_template,request,redirect,url_for,make_response,flash,get_flashed_messages
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import desc
 
 import random
 import time
@@ -153,7 +154,7 @@ class logs(db.Model):
         user = users.query.filter(users.id == self.user_id).first()
         if user is None: user = users(display_name=f"deleted user ({self.user_id})")
 
-        return user.display_name +" "+  self.message + " at " + str( datetime.utcfromtimestamp(self.time_stamp))
+        return f"[{str(datetime.utcfromtimestamp(self.time_stamp))}] {user.display_name} {self.message}"
 
 # Dopuszczalne godziny wstępu
 class access_hours(db.Model):
@@ -289,7 +290,7 @@ def admin():
         code=code,
         bind_code=bind_code,
         admin=u,
-        logs=logs.query.all(),
+        logs=logs.query.order_by(desc(logs.time_stamp)).all(),
         access_hours=access_hours.query.all()
     )
 
@@ -315,7 +316,7 @@ def user():
         return errors["unknown_error"]
 
     # Wyszukaj potrzebne użytkownikowi dane
-    user_logs = logs.query.filter(logs.user_id == user.id).all()
+    user_logs = logs.query.filter(logs.user_id == user.id).order_by(desc(logs.time_stamp)).all()
     hours = access_hours.query.filter(access_hours.user_id == user.id).all()
     alerts = get_flashed_messages(with_categories=True)
 
