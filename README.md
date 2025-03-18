@@ -4,7 +4,8 @@ Door-authenticator to prosty system umorzliwiający weryfikację urzutkowników 
 Urzytkownicy i Administratorzy mogą logować się do systemu poprzez specjalnie zaprojektowaną witrynę internetową, gdzie majądostęp do przyznanych im funkcji oraz podgląd dotyczących ich informacji.
 
 
-##Technologie
+## Technologie
+
 - **Python** - język w któryn napisana jest aplikacja
 - **Flask** - urzywany do obsługi rządań urzytkowników
 - **Flask-SQLAlchemy** - urzywany do zarządzania bazą danych przechowującą aktualne informacje o stanie systemu i użytkownikach
