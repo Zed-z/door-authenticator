@@ -1,6 +1,6 @@
 # door-authenticator - system kontroli dostępu
 
-Door-authenticator to prosty system umorzliwiający weryfikację urzutkowników i kontrolę dostępu do pomieszczenia.
+Door-authenticator to stworzony w ramach zajęć z systmów wbudowanych prosty system umorzliwiający weryfikację urzutkowników i kontrolę dostępu do pomieszczenia.
 Urzytkownicy i Administratorzy mogą logować się do systemu poprzez specjalnie zaprojektowaną witrynę internetową, gdzie majądostęp do przyznanych im funkcji oraz podgląd dotyczących ich informacji.
 
 
